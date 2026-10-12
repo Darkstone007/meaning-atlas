@@ -13,9 +13,11 @@ type Entry = {
   rephrasing: string;
   change: string;
   withheld: string;
+  alsoUsed: string;
   tags: { emotion: string[]; context: string[]; intention: string[] };
   image: string | null;
   audio: string | null;
+  video: string | null;
   source: string;
   userId: string | null;
   mine: boolean;
@@ -83,7 +85,7 @@ export function Carry() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [view, setView] = useState<"web" | "shelves" | "add" | "people">("web");
+  const [view, setView] = useState<"home" | "web" | "shelves" | "add" | "people">("home");
   const [gate, setGate] = useState<"home" | "return" | "create" | "made">("home");
   const [madeId, setMadeId] = useState("");
   const [note, setNote] = useState("");
@@ -105,7 +107,6 @@ export function Carry() {
       setRevealFlag(Boolean(data.profile.reveal));
     }
     setEntries(data.entries || []);
-    if (!selected && data.entries?.[0]) setSelected(data.entries[0].id);
     const people = await fetch("/api/atlas/profiles");
     const listed = await people.json();
     setProfiles(listed.profiles || []);
@@ -153,109 +154,111 @@ export function Carry() {
     });
   }, [entries, query]);
 
-  const scene = useMemo(() => {
-    const groups = new Map<string, Entry[]>();
+  const groups = useMemo(() => {
+    const map = new Map<string, Entry[]>();
     visible.forEach((entry) => {
       const key = `${normalize(entry.expression)}|${normalize(entry.language)}`;
-      groups.set(key, [...(groups.get(key) || []), entry]);
+      map.set(key, [...(map.get(key) || []), entry]);
     });
-    const list = [...groups.values()];
-    const nodes: { id: string; label: string; kind: string; open: string; x: number; y: number }[] = [];
-    const lines: { a: string; b: string; dashed: boolean }[] = [];
+    return [...map.entries()].map(([key, accounts]) => ({
+      key,
+      expression: accounts[0].expression,
+      language: accounts[0].language,
+      accounts,
+    }));
+  }, [visible]);
+
+  const scene = useMemo(() => {
+    const nodes: { id: string; label: string; sub: string; x: number; y: number }[] = [];
+    const lines: { a: string; b: string }[] = [];
     const yawRad = (yaw * Math.PI) / 180;
     const pitchRad = (pitch * Math.PI) / 180;
-    list.forEach((accounts, index) => {
-      const x = (index - (list.length - 1) / 2) * 190;
-      const wordId = `w${index}`;
-      const wordPoint = project([x, -120, 0], yawRad, pitchRad, size.width, size.height);
-      nodes.push({ id: wordId, label: accounts[0].expression, kind: "word", open: accounts[0].id, x: wordPoint[0], y: wordPoint[1] });
-      accounts.forEach((entry, child) => {
-        const spread = accounts.length === 1 ? 0 : (child - (accounts.length - 1) / 2) * 86;
-        const point = project([x + spread, 70, 36], yawRad, pitchRad, size.width, size.height);
-        nodes.push({
-          id: entry.id,
-          label: entry.userId || "account",
-          kind: "response",
-          open: entry.id,
-          x: point[0],
-          y: point[1],
-        });
-        lines.push({ a: wordId, b: entry.id, dashed: false });
-      });
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    groups.forEach((group, index) => {
+      const count = Math.max(groups.length, 2);
+      const y = 1 - (index / (count - 1)) * 2;
+      const ring = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = golden * index;
+      const point = project(
+        [Math.cos(theta) * ring * 230, y * 150, Math.sin(theta) * ring * 230],
+        yawRad,
+        pitchRad,
+        size.width,
+        size.height,
+      );
+      nodes.push({ id: group.key, label: group.expression, sub: group.language, x: point[0], y: point[1] });
     });
     if (layer !== "none") {
-      for (let i = 0; i < visible.length; i++) {
-        for (let j = i + 1; j < visible.length; j++) {
-          const shared = visible[i].tags[layer].filter((tag) => visible[j].tags[layer].includes(tag));
-          if (shared.length) lines.push({ a: visible[i].id, b: visible[j].id, dashed: true });
+      for (let i = 0; i < groups.length; i++) {
+        for (let j = i + 1; j < groups.length; j++) {
+          const shared = groups[i].accounts.some((left) =>
+            groups[j].accounts.some((right) => left.tags[layer].some((tag) => right.tags[layer].includes(tag))),
+          );
+          if (shared) lines.push({ a: groups[i].key, b: groups[j].key });
         }
       }
     }
     return { nodes, lines };
-  }, [visible, yaw, pitch, size, layer]);
+  }, [groups, yaw, pitch, size, layer]);
 
-  const chosen = entries.find((entry) => entry.id === selected) || null;
-
-  if (!profileId) {
-    return (
-      <section className="carry-gate">
-        <div className="carry-card">
-          <p className="carry-eyebrow">The Words We Carry</p>
-          <h1>Meaning Atlas</h1>
-          <p className="carry-lede">Start with a word. Open the account around it. Come in as a guest, or keep an ID so this browser can find your words again.</p>
-          {gate === "home" ? (
-            <div className="carry-stack">
-              <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
-              <button type="button" onClick={() => setGate("return")}>I already have an ID</button>
-              <button type="button" onClick={() => setGate("create")}>Make a record</button>
-            </div>
-          ) : null}
-          {gate === "return" ? (
-            <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
-              <label>Your ID<input name="id" required placeholder="U-0000" /></label>
-              <label>Passphrase<input name="pass" type="password" required /></label>
-              <button className="carry-primary" type="submit">Come back in</button>
-            </form>
-          ) : null}
-          {gate === "create" ? (
-            <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "create", passphrase: String(data.get("pass")) }); }}>
-              <label>Choose a passphrase<input name="pass" type="password" minLength={4} required /></label>
-              <button className="carry-primary" type="submit">Make my ID</button>
-            </form>
-          ) : null}
-          {gate === "made" ? (
-            <div>
-              <p className="carry-lede">Write this down. It is how you return to your words.</p>
-              <p className="carry-id">{madeId}</p>
-              <button className="carry-primary" type="button" onClick={() => void refresh()}>Enter the atlas</button>
-            </div>
-          ) : null}
-          {note ? <p className="carry-bad">{note}</p> : null}
-          <p className="carry-fine">Your ID stays hidden on the web unless you choose to show it. A guest and a saved record are both kept by the server in this project.</p>
-        </div>
-      </section>
-    );
-  }
+  const chosen = groups.find((group) => group.key === selected) || null;
 
   return (
     <div className="carry">
       <header className="carry-top">
         <div>
-          <p className="carry-eyebrow">The Words We Carry</p>
           <strong>Meaning Atlas</strong>
         </div>
         <nav>
-          {(["web", "shelves", "add", "people"] as const).map((item) => (
+          {(["home", "web", "shelves", "add", "people"] as const).map((item) => (
             <button key={item} type="button" className={view === item ? "on" : ""} onClick={() => setView(item)}>
-              {item === "web" ? "Word web" : item === "shelves" ? "Shelves" : item === "add" ? "Add a word" : "Profiles"}
+              {item === "home" ? "Home" : item === "web" ? "Word web" : item === "shelves" ? "Shelves" : item === "add" ? "Add a word" : "Profiles"}
             </button>
           ))}
         </nav>
         <div className="carry-who">
-          <span>{reveal ? profileId : "ID hidden"}</span>
-          <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => setProfileId(null))}>Leave</button>
+          {profileId ? <span>{reveal ? profileId : "ID hidden"}</span> : <button type="button" onClick={() => setView("home")}>Come in</button>}
+          {profileId ? <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => setProfileId(null))}>Leave</button> : null}
         </div>
       </header>
+      {view === "home" ? (
+        <main className="carry-main">
+          <ProjectInfo />
+          <section className="carry-card carry-inline">
+            <h2>Keep a record</h2>
+            <p className="carry-lede">Browsing needs no ID. An ID only keeps the words you add. It stays hidden unless you choose to show it.</p>
+            {profileId ? <p>You are in as {reveal ? profileId : "a hidden ID"}.</p> : null}
+            {!profileId && gate === "home" ? (
+              <div className="carry-stack">
+                <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
+                <button type="button" onClick={() => setGate("return")}>I already have an ID</button>
+                <button type="button" onClick={() => setGate("create")}>Make a record</button>
+              </div>
+            ) : null}
+            {!profileId && gate === "return" ? (
+              <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
+                <label>Your ID<input name="id" required placeholder="U-0000" /></label>
+                <label>Passphrase<input name="pass" type="password" required /></label>
+                <button className="carry-primary" type="submit">Come back in</button>
+              </form>
+            ) : null}
+            {!profileId && gate === "create" ? (
+              <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "create", passphrase: String(data.get("pass")) }); }}>
+                <label>Choose a passphrase<input name="pass" type="password" minLength={4} required /></label>
+                <button className="carry-primary" type="submit">Make my ID</button>
+              </form>
+            ) : null}
+            {gate === "made" ? (
+              <div>
+                <p className="carry-lede">Write this down. It is how you return to your words.</p>
+                <p className="carry-id">{madeId}</p>
+                <button className="carry-primary" type="button" onClick={() => void refresh()}>Done</button>
+              </div>
+            ) : null}
+            {note ? <p className="carry-bad">{note}</p> : null}
+          </section>
+        </main>
+      ) : null}
       {view === "web" ? (
         <main className="carry-main">
           <div className="carry-tools">
@@ -265,67 +268,76 @@ export function Carry() {
                 <option value="emotion">Emotion</option>
                 <option value="context">Context</option>
                 <option value="intention">Intention</option>
-                <option value="none">Branches only</option>
+                <option value="none">No dashed lines</option>
               </select>
             </label>
           </div>
-          <p className="carry-fine">Drag the web, or use the controls underneath. Solid lines are a word and its accounts. A dashed line is a shared label, not a translation.</p>
+          <p className="carry-fine">Drag the web, or use the controls under it. Only words are in the web. A dashed line is a shared label. Press a word for its meanings. Press it again to return to the project.</p>
           <div
             ref={stageRef}
             className="carry-stage"
-            onPointerDown={(event) => { drag.current = { x: event.clientX, y: event.clientY, yaw, pitch }; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); }}
+            onPointerDown={(event) => { if ((event.target as HTMLElement).closest(".carry-node")) return; drag.current = { x: event.clientX, y: event.clientY, yaw, pitch }; (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId); }}
             onPointerMove={(event) => {
               if (!drag.current) return;
               setYaw(drag.current.yaw + (event.clientX - drag.current.x) * 0.35);
-              setPitch(Math.max(-40, Math.min(40, drag.current.pitch + (event.clientY - drag.current.y) * 0.12)));
+              setPitch(Math.max(-55, Math.min(55, drag.current.pitch + (event.clientY - drag.current.y) * 0.15)));
             }}
             onPointerUp={() => { drag.current = null; }}
           >
             <svg aria-hidden="true">
-              {scene.lines.map((line, index) => {
+              {scene.lines.map((line) => {
                 const a = scene.nodes.find((node) => node.id === line.a);
                 const b = scene.nodes.find((node) => node.id === line.b);
                 if (!a || !b) return null;
-                return <line key={index} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={line.dashed ? "#d7c6e6" : "#7a5a9a"} strokeDasharray={line.dashed ? "5 6" : undefined} />;
+                return <line key={`${line.a}-${line.b}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#d7c6e6" strokeDasharray="5 6" />;
               })}
             </svg>
             {scene.nodes.map((node) => (
-              <button key={node.id} type="button" className={`carry-node ${node.kind}${node.open === selected ? " on" : ""}`} style={{ left: node.x, top: node.y }} onClick={() => setSelected(node.open)}>
-                {node.label}
+              <button key={node.id} type="button" className={`carry-node word${node.id === selected ? " on" : ""}`} style={{ left: node.x, top: node.y }} onClick={() => setSelected((current) => current === node.id ? null : node.id)}>
+                <b>{node.label}</b>
+                <small>{node.sub}</small>
               </button>
             ))}
           </div>
           <div className="carry-controls">
             <label>Rotate<input type="range" min={-180} max={180} value={yaw} onChange={(event) => setYaw(Number(event.target.value))} /></label>
-            <label>Tilt<input type="range" min={-40} max={40} value={pitch} onChange={(event) => setPitch(Number(event.target.value))} /></label>
-            <button type="button" onClick={() => { setYaw(18); setPitch(12); }}>Reset view</button>
+            <label>Tilt<input type="range" min={-55} max={55} value={pitch} onChange={(event) => setPitch(Number(event.target.value))} /></label>
+            <button type="button" onClick={() => { setYaw(24); setPitch(16); }}>Reset view</button>
           </div>
           <article className="carry-story">
-            {chosen ? <Story entry={chosen} /> : <p>Choose a word, then the account beneath it.</p>}
+            {chosen ? chosen.accounts.map((entry) => <Story key={entry.id} entry={entry} />) : <ProjectInfo />}
           </article>
-          <section className="carry-concept">
-            <h2>What this is trying to do</h2>
-            <p>The Words We Carry is an installation where a visitor starts with a word and opens the account around it: what it means to that person, when they use it, and a voice or image only if they gave one. Two people can use the same spelling without becoming one definition. Massa is filed only under Wolof. The proverb is filed only under Montenegrin, even though the writer also named Serbian and Bosnian. Lekker and shame are Afrikaans examples of the same kind of encounter. They are not survey findings.</p>
-            <p>The three other accounts are writings that were cleared to be shown. No name is on the web. An ID appears only when that person chooses to show it. A solid branch belongs to one account. A dashed line means both people chose the same label. The distance on the screen is only so you can move around the collection. It is not a score of how close two cultures are.</p>
-            <p>This form came from wanting a visitor to follow an expression into someone else’s explanation, and to leave room for their own. The categories are optional and can be extended. They are not detected from a voice. That limit follows the interactional account of emotion in Boehner, DePaula, Dourish and Sengers, “How emotion is made and measured” (2007). The refusal to treat the picture as proof follows Johanna Drucker, “Humanities approaches to graphical display” (2011).</p>
-          </section>
         </main>
       ) : null}
-      {view === "shelves" ? <Shelves entries={visible} onOpen={(id) => { setSelected(id); setView("web"); }} /> : null}
+      {view === "shelves" ? <Shelves entries={visible} /> : null}
       {view === "people" ? (
         <People profiles={profiles} reveal={reveal} onToggle={async (next) => { await fetch("/api/atlas/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reveal: next }) }); setRevealFlag(next); await refresh(); }} />
       ) : null}
-      {view === "add" ? <Add onDone={async (id) => { await refresh(); setSelected(id); setView("web"); }} /> : null}
+      {view === "add" ? (profileId ? <Add onDone={async (id) => { await refresh(); const entry = (await (await fetch("/api/atlas/entries")).json()).entries.find((item: Entry) => item.id === id); setSelected(entry ? `${normalize(entry.expression)}|${normalize(entry.language)}` : null); setView("web"); }} /> : <main className="carry-main"><p className="carry-lede">Come in from the home page before adding a word. The ID stays hidden.</p><button type="button" onClick={() => setView("home")}>Go to home</button></main>) : null}
     </div>
+  );
+}
+
+function ProjectInfo() {
+  return (
+    <section className="carry-concept">
+      <p className="carry-eyebrow">Meaning Atlas</p>
+      <h2>The words we carry</h2>
+      <p>Meaning Atlas is this project. It was first called The Words We Carry. The name changed. The work is the same: a place where a visitor starts with a word and stays with what it means to the person who uses it.</p>
+      <p>Each word belongs to one language. If that person also uses it in other languages, that is written beside the word. It does not split the word onto extra shelves. Massa is Wolof. Čist račun - duga ljubav is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples of the same kind of encounter. They are not survey findings. The other three are writings that were cleared to be shown.</p>
+      <p>The web holds words, not people. Press a word and its meanings appear underneath. Press it again and this note returns. A dashed line means two words were given the same label. Distance in the picture is only so the web can be turned. It is not a measure of how close two cultures are. People stay hidden unless they choose to show an ID.</p>
+      <p>The form came from wanting someone to follow an expression into another person’s explanation, and to leave room for their own. A picture, a voice, or a video appears only if that person gave one. Labels are offered from what was written, and nothing is applied until someone chooses it. That limit follows Boehner, DePaula, Dourish and Sengers, “How emotion is made and measured” (2007). The refusal to treat the picture as proof follows Johanna Drucker, “Humanities approaches to graphical display” (2011).</p>
+    </section>
   );
 }
 
 function Story({ entry }: { entry: Entry }) {
   return (
     <>
-      <p className="carry-eyebrow">{entry.source === "example" ? "Illustrative account" : entry.source === "survey" ? "Survey account" : "Added here"}</p>
+      <p className="carry-eyebrow">{entry.source === "example" ? "Example, not a survey response" : entry.source === "survey" ? "From the survey" : "Added here"}</p>
       <h2>{entry.expression}</h2>
-      <p className="carry-fine">{entry.language}{entry.community ? ` · ${entry.community}` : ""}{entry.userId ? ` · ${entry.userId}` : " · ID hidden"}</p>
+      <p className="carry-fine">{entry.language}{entry.community ? ` · ${entry.community}` : ""}{entry.userId ? ` · ${entry.userId}` : ""}</p>
+      {entry.alsoUsed ? <div className="carry-pair"><span>Also used in</span><p>{entry.alsoUsed}</p></div> : null}
       {STORY.map(([label, key]) => {
         const text = String(entry[key] || "");
         if (!text) return null;
@@ -333,27 +345,43 @@ function Story({ entry }: { entry: Entry }) {
       })}
       {entry.image ? <img src={entry.image} alt="" /> : null}
       {entry.audio ? <audio controls src={entry.audio} /> : null}
+      {entry.video ? <video controls src={entry.video} /> : null}
     </>
   );
 }
 
-function Shelves({ entries, onOpen }: { entries: Entry[]; onOpen: (id: string) => void }) {
+function Shelves({ entries }: { entries: Entry[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const [reading, setReading] = useState<string | null>(null);
   const languages = [...new Set(entries.map((entry) => entry.language))].sort((a, b) => a.localeCompare(b, "en"));
   return (
     <main className="carry-main">
-      {languages.map((language) => (
-        <section key={language}>
-          <h2>{language}</h2>
-          <div className="carry-books">
-            {entries.filter((entry) => entry.language === language).map((entry) => (
-              <button key={entry.id} type="button" onClick={() => onOpen(entry.id)}>
-                <strong>{entry.expression}</strong>
-                <span>{entry.userId || "ID hidden"}</span>
+      <h2>Language shelves</h2>
+      <p className="carry-lede">Each language is a book. Open it here. The words stay on this shelf. They do not jump to the web.</p>
+      <div className="shelf-row">
+        {languages.map((language) => {
+          const books = entries.filter((entry) => entry.language === language);
+          const isOpen = open === language;
+          const page = books.find((entry) => entry.id === reading);
+          return (
+            <div key={language} className={`volume${isOpen ? " open" : ""}`}>
+              <button type="button" className="cover" onClick={() => { setOpen(isOpen ? null : language); setReading(null); }}>
+                <span>{language}</span>
+                <small>{isOpen ? "Close the book" : "Open the book"}</small>
               </button>
-            ))}
-          </div>
-        </section>
-      ))}
+              <div className="pages">
+                <p>{language}. {books.length} {books.length === 1 ? "word" : "words"} filed here. Other languages a word travels through are noted inside, not as another book.</p>
+                {books.map((entry) => (
+                  <button key={entry.id} type="button" className={reading === entry.id ? "on" : ""} onClick={() => setReading(reading === entry.id ? null : entry.id)}>
+                    {entry.expression}
+                  </button>
+                ))}
+                {page ? <Story entry={page} /> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </main>
   );
 }
@@ -382,6 +410,7 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
   const [custom, setCustom] = useState({ emotion: "", context: "", intention: "" });
   const [image, setImage] = useState<{ mime: string; data: string } | null>(null);
   const [audio, setAudio] = useState<{ mime: string; data: string } | null>(null);
+  const [video, setVideo] = useState<{ mime: string; data: string } | null>(null);
   const [error, setError] = useState("");
   const noticed = suggest(text).filter((hint) => !picked[hint.layer].includes(hint.tag));
 
@@ -407,6 +436,7 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
           body: JSON.stringify({
             expression: data.get("expression"),
             language: data.get("language"),
+            alsoUsed: data.get("alsoUsed"),
             community: data.get("community"),
             meaning: data.get("meaning"),
             example: data.get("example"),
@@ -421,6 +451,7 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
             intentionTags,
             image,
             audio,
+            video,
           }),
         });
         const body = await response.json();
@@ -431,7 +462,13 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
         <h2>Add what it means to you</h2>
         <div className="carry-two">
           <label>Word<input name="expression" required maxLength={120} /></label>
-          <label>Language<input name="language" required maxLength={80} placeholder="One language" /></label>
+          <label>One language<input name="language" required maxLength={80} placeholder="The language this word belongs to" /></label>
+        </div>
+        <label>Also used in other languages<input name="alsoUsed" placeholder="Only if you use it across others. Separate with ;" /></label>
+        <div className="carry-uploads">
+          <label>Image<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={async (event) => { const file = event.target.files?.[0]; setImage(file ? await readFile(file) : null); }} /><span>Optional. Empty means no picture.</span></label>
+          <label>Audio<input type="file" accept="audio/*" onChange={async (event) => { const file = event.target.files?.[0]; setAudio(file ? await readFile(file) : null); }} /><span>Optional. Empty means no player.</span></label>
+          <label>Video<input type="file" accept="video/mp4,video/webm" onChange={async (event) => { const file = event.target.files?.[0]; setVideo(file ? await readFile(file) : null); }} /><span>Optional. Empty means no video.</span></label>
         </div>
         <label>Community, if it matters<input name="community" /></label>
         <label>Meaning<textarea name="meaning" required onChange={(event) => setText(event.target.value)} /></label>
@@ -466,11 +503,6 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
             <label>Add to {layer}<input value={custom[layer]} placeholder="your own labels, separated by ;" onChange={(event) => setCustom((current) => ({ ...current, [layer]: event.target.value }))} /></label>
           </fieldset>
         ))}
-        <div className="carry-two">
-          <label>Image, if you want one<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={async (event) => { const file = event.target.files?.[0]; setImage(file ? await readFile(file) : null); }} /></label>
-          <label>Audio, if you want one<input type="file" accept="audio/*" onChange={async (event) => { const file = event.target.files?.[0]; setAudio(file ? await readFile(file) : null); }} /></label>
-        </div>
-        <p className="carry-fine">If you leave these empty, the account simply has no picture and no sound. Nothing blank is shown.</p>
         <button className="carry-primary" type="submit">Place it on the web</button>
         {error ? <p className="carry-bad">{error}</p> : null}
       </form>
