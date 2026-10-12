@@ -1,53 +1,7 @@
 const SEED = [
-  {
-    id: "acct-4f2a",
-    userId: "U-4F2A",
-    expression: "Massa",
-    languages: "Wolof",
-    community: "Wolof",
-    meaning: "I did not realize I used it so often until I came here where I had to find a world to translate it or explain the whole meaning and context to my friends. I love this word so much, among other wolof words, because it can communicate so much in such a simple manner.",
-    example: "This is used when someone is aching or hurt. \"I stub my toe\" \"Ow massa\". It is not for the heaviest losses. Those need heavier words than a simple massa.",
-    feeling: "Care, said lightly.",
-    context: "French and Wolof with some friends and family. English with friends.",
-    intention: "Comfort.",
-    rephrasing: "The closest word I have found in use is the Arabic مِسْكِين. Before that I simply explained it, then kept saying it with them.",
-    change: "A few sentences have to stand in for one word.",
-    withheld: "I would not use it with people who are not close, or with a professor. It is informal in Wolof itself.",
-    tags: { emotion: ["care"], context: ["friends", "family"], intention: ["comfort"] },
-    audio: ""
-  },
-  {
-    id: "acct-91c7",
-    userId: "U-91C7",
-    expression: "Massa",
-    languages: "Wolof",
-    community: "Senegal",
-    meaning: "When I say Massa, I am telling someone that I see their pain, that I care, and that they do not have to feel alone in it. It works even when there is nothing else to say.",
-    example: "A child who falls. A friend who has lost someone. The situations differ. The word still fits.",
-    feeling: "Care, and a kind of solidarity.",
-    context: "Wolof with family and other Senegalese people. Also with NYUAD friends, who now understand it.",
-    intention: "Comfort.",
-    rephrasing: "I usually say it means something like \"I'm sorry\". That sounds more polite, and less close, than Massa feels.",
-    change: "I can explain the meaning. I am not sure I can translate how it feels.",
-    withheld: "Around Senegalese people I use it without thinking. I also use it with friends who are not Senegalese, and some of them use it back.",
-    tags: { emotion: ["care"], context: ["friends", "family"], intention: ["comfort"] },
-    audio: ""
-  },
-  {
-    id: "acct-3b80",
-    userId: "U-3B80",
-    expression: "Čist račun - duga ljubav",
-    languages: "Montenegrin; Serbian; Bosnian",
-    community: "The Balkans",
-    meaning: "It says somebody is rightful and respects the deal. If the deal stays clean, the love can last, because there is no bad blood.",
-    example: "Somebody is giving back a debt, even to a close friend.",
-    feeling: "Affection for a sentence that feels like home.",
-    context: "Friends, including when money is between them.",
-    intention: "Approval of a clean dealing.",
-    rephrasing: "The literal translation is clear debt, long love. It does not sit the same way in English.",
-    change: "The sentence is not replaced. It is only pointed at.",
-    withheld: "It is part of how I speak when it is accurate. There is no other sentence like it.",
-    tags: { emotion: ["affection"], context: ["friends"], intention: ["approval"] },
-    audio: ""
-  }
+  { id: "acct-4f2a", userId: "U-4F2A", reveal: false, expression: "Massa", language: "Wolof", community: "Wolof", source: "survey", meaning: "I did not realize I used it so often until I came here and had to explain the whole meaning to my friends. I love this word because it can communicate so much in such a simple manner.", example: "Someone is aching or hurt. \"I stub my toe.\" \"Ow, massa.\" It is not for the heaviest losses.", feeling: "Care, said lightly.", context: "With some friends and family.", intention: "Comfort.", rephrasing: "The closest word I have found in use is the Arabic مِسْكِين.", change: "A few sentences have to stand in for one word.", withheld: "I would not use it with people who are not close, or with a professor.", tags: { emotion: ["care"], context: ["friends", "family"], intention: ["comfort"] }, image: "", audio: "" },
+  { id: "acct-91c7", userId: "U-91C7", reveal: false, expression: "Massa", language: "Wolof", community: "Senegal", source: "survey", meaning: "When I say Massa, I am telling someone that I see their pain and that they do not have to feel alone in it. It still works when there is nothing else to say.", example: "A child who falls. A friend who has lost someone. The situations differ. The word still fits.", feeling: "Care, and solidarity.", context: "With family, and with friends who have learned what it means.", intention: "Comfort.", rephrasing: "I usually say it is something like \"I'm sorry\". That sounds more polite, and less close.", change: "I can explain the meaning. I am not sure I can translate how it feels.", withheld: "Around Senegalese people I use it without thinking. Some friends use it back.", tags: { emotion: ["care"], context: ["friends", "family"], intention: ["comfort"] }, image: "", audio: "" },
+  { id: "acct-3b80", userId: "U-3B80", reveal: false, expression: "Čist račun - duga ljubav", language: "Montenegrin", community: "The Balkans", source: "survey", meaning: "It says somebody is rightful and respects the deal. If the dealing stays clean, the love can last. The writer also named Serbian and Bosnian. The entry is filed under one language, Montenegrin.", example: "Somebody is giving a debt back, even to a close friend.", feeling: "Affection for a sentence that feels like home.", context: "Friends, including when money is between them.", intention: "Approval of a clean dealing.", rephrasing: "The literal translation is clear debt, long love.", change: "The sentence is not replaced. It is only pointed at.", withheld: "It is part of how I speak when it is accurate.", tags: { emotion: ["affection"], context: ["friends"], intention: ["approval"] }, image: "", audio: "" },
+  { id: "ex-lekker", userId: "U-LEKR", reveal: false, expression: "lekker", language: "Afrikaans", community: "", source: "example", meaning: "An illustrative account, not a survey response. Lekker says something is pleasant, tasty, or good. Food can be lekker. A day can be lekker.", example: "After a meal: \"That was lekker.\"", feeling: "Pleasure, said easily.", context: "Friends, often around food.", intention: "Approval.", rephrasing: "Nice, tasty, or great, depending on what it is attached to.", change: "The English words split one feeling into several.", withheld: "", tags: { emotion: ["joy"], context: ["friends"], intention: ["approval"] }, image: "", audio: "" },
+  { id: "ex-shame", userId: "U-SHME", reveal: false, expression: "shame", language: "Afrikaans", community: "", source: "example", meaning: "An illustrative account, not a survey response. In this Afrikaans and South African use, shame is not disgrace. It is a small sound of sympathy or tenderness.", example: "A child shows a scraped knee. \"Shame.\"", feeling: "Care, without a speech.", context: "Friends and family.", intention: "Comfort.", rephrasing: "Something like \"oh, you poor thing\", or \"that's sweet\".", change: "English makes it sound like guilt. That is not this use.", withheld: "", tags: { emotion: ["care"], context: ["friends", "family"], intention: ["comfort"] }, image: "", audio: "" }
 ];

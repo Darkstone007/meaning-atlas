@@ -78,6 +78,20 @@ function visibleRecords() {
   return searchRecords(state.records, document.getElementById("search").value);
 }
 
+function project(point, yaw, pitch, width, height) {
+  const yawRad = yaw * Math.PI / 180, pitchRad = pitch * Math.PI / 180;
+  const x1 = point[0] * Math.cos(yawRad) + point[2] * Math.sin(yawRad);
+  const z1 = -point[0] * Math.sin(yawRad) + point[2] * Math.cos(yawRad);
+  const y1 = point[1] * Math.cos(pitchRad) - z1 * Math.sin(pitchRad);
+  const z2 = point[1] * Math.sin(pitchRad) + z1 * Math.cos(pitchRad);
+  const depth = 680 / (680 - z2);
+  return [width / 2 + x1 * depth, height / 2 + y1 * depth];
+}
+let yaw = 18, pitch = 12, dragging = null;
+function shownId(record) {
+  const person = state.people.find((item) => item.id === record.userId);
+  return record.reveal || person?.reveal ? record.userId : "";
+}
 function renderWeb() {
   const visible = visibleRecords();
   const layer = document.getElementById("layer").value;
@@ -97,11 +111,13 @@ function renderWeb() {
   const lines = [];
   groups.forEach((group, index) => {
     const x = width / 2 + (index - (groups.length - 1) / 2) * Math.min(240, (width - 80) / Math.max(groups.length, 1));
-    const word = { id: "w" + index, label: group.expression, kind: "word", x, y: height * 0.28, open: group.accounts[0].id };
+    const wordPoint = project([x - width / 2, -120, 0], yaw, pitch, width, height);
+    const word = { id: "w" + index, label: group.expression, kind: "word", x: wordPoint[0], y: wordPoint[1], open: group.accounts[0].id };
     nodes.push(word);
     group.accounts.forEach((record, child) => {
-      const spread = group.accounts.length === 1 ? 0 : (child - (group.accounts.length - 1) / 2) * 92;
-      nodes.push({ id: record.id, label: record.userId, kind: "response", x: x + spread, y: height * 0.68, open: record.id });
+      const spread = group.accounts.length === 1 ? 0 : (child - (group.accounts.length - 1) / 2) * 86;
+      const point = project([x - width / 2 + spread, 70, 36], yaw, pitch, width, height);
+      nodes.push({ id: record.id, label: shownId(record) || "account", kind: "response", x: point[0], y: point[1], open: record.id });
       lines.push([word, nodes[nodes.length - 1], false]);
     });
   });
@@ -148,7 +164,7 @@ function renderStory(record, edges) {
   title.textContent = record.expression;
   const meta = document.createElement("p");
   meta.className = "meta";
-  meta.textContent = record.userId + " · " + record.languages + (record.community ? " · " + record.community : "");
+  meta.textContent = (shownId(record) || "ID hidden") + " · " + record.language + (record.community ? " · " + record.community : "");
   box.append(title, meta);
   STORY.forEach(([label, key]) => {
     const row = document.createElement("div");
@@ -160,20 +176,25 @@ function renderStory(record, edges) {
     row.append(name, text);
     box.append(row);
   });
-  const audio = document.createElement("div");
-  audio.className = "pair";
-  const audioName = document.createElement("span");
-  audioName.textContent = "Audio";
-  const audioText = document.createElement("p");
-  audioText.textContent = record.audio ? "" : "No recording supplied.";
   if (record.audio) {
+    const audio = document.createElement("div");
+    audio.className = "pair";
+    const audioName = document.createElement("span");
+    audioName.textContent = "Audio";
+    const audioText = document.createElement("p");
     const player = document.createElement("audio");
     player.controls = true;
     player.src = record.audio;
     audioText.append(player);
+    audio.append(audioName, audioText);
+    box.append(audio);
   }
-  audio.append(audioName, audioText);
-  box.append(audio);
+  if (record.image) {
+    const image = document.createElement("img");
+    image.src = record.image;
+    image.alt = "";
+    box.append(image);
+  }
   const related = (edges || []).filter((edge) => edge.source === record.id || edge.target === record.id);
   if (related.length) {
     const row = document.createElement("div");
@@ -191,17 +212,7 @@ function renderShelves() {
   const host = document.getElementById("shelves");
   host.replaceChildren();
   const groups = grouped(visibleRecords());
-  const languages = [];
-  const seen = new Set();
-  groups.forEach((group) => {
-    group.languages.split(";").forEach((part) => {
-      const label = part.trim().replace(/\s+/g, " ");
-      const key = normalize(label);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      languages.push(label);
-    });
-  });
+  const languages = [...new Set(groups.map((group) => group.language))].filter(Boolean);
   if (!languages.length) {
     host.append(Object.assign(document.createElement("p"), { className: "lede", textContent: "No languages in this search." }));
     return;
@@ -213,7 +224,7 @@ function renderShelves() {
     heading.textContent = language;
     const books = document.createElement("div");
     books.className = "books";
-    groups.filter((group) => group.languages.split(";").some((part) => normalize(part) === normalize(language))).forEach((group) => {
+    groups.filter((group) => normalize(group.language) === normalize(language)).forEach((group) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "book";
@@ -249,7 +260,7 @@ function renderMine() {
     const strong = document.createElement("strong");
     strong.textContent = record.expression;
     const span = document.createElement("span");
-    span.textContent = record.languages;
+    span.textContent = record.language;
     button.append(strong, span);
     button.onclick = () => { selected = record.id; show("web"); };
     books.append(button);
@@ -336,7 +347,7 @@ document.getElementById("add").onsubmit = (event) => {
     id: crypto.randomUUID(),
     userId: state.session.id,
     expression: "",
-    languages: "",
+    language: "",
     community: "",
     meaning: "",
     example: "",
@@ -349,7 +360,8 @@ document.getElementById("add").onsubmit = (event) => {
     tags: { emotion: [], context: [], intention: [] },
     audio: ""
   };
-  FIELDS.forEach((key) => { record[key] = form.elements[key].value.trim(); });
+  FIELDS.forEach((key) => { if (form.elements[key]) record[key] = form.elements[key].value.trim(); });
+  record.language = String(form.elements.language.value || "").split(";")[0].trim();
   Object.keys(VOCAB).forEach((layer) => {
     record.tags[layer] = [...form.querySelectorAll('[name="tag-' + layer + '"]:checked')].map((input) => input.value);
   });

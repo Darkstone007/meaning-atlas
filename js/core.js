@@ -10,7 +10,8 @@ function tags(value) {
 }
 
 function wordKey(record) {
-  return JSON.stringify([normalize(record.expression), tags(record.languages).sort(), normalize(record.community)]);
+  const language = record.language || record.languages || "";
+  return JSON.stringify([normalize(record.expression), normalize(language), normalize(record.community)]);
 }
 
 function layerTags(record, layer) {
@@ -43,7 +44,7 @@ function grouped(records) {
   records.forEach((record) => {
     const key = wordKey(record);
     if (!groups.has(key)) {
-      groups.set(key, { key, expression: record.expression, languages: record.languages, community: record.community, accounts: [] });
+      groups.set(key, { key, expression: record.expression, language: record.language || record.languages || "", community: record.community, accounts: [] });
     }
     groups.get(key).accounts.push(record);
   });
