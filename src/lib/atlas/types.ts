@@ -14,7 +14,6 @@ export const NARRATIVE_FIELDS = [
   "identity",
   "withheld",
   "listenerPractice",
-  "attribution",
 ] as const;
 
 export type NarrativeField = (typeof NARRATIVE_FIELDS)[number];
@@ -58,6 +57,8 @@ export type Account = {
   typeReviewed: boolean;
   displayConsent: boolean;
   consent: Consent;
+  /** Public handle on the tree. Never a name. */
+  userId: string;
   attribution: string;
   expression: string;
   languages: string;

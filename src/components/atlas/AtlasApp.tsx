@@ -1,5 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { signOut } from "@/lib/auth/client";
+import { SignedIn, SignedOut } from "@/lib/auth/gates";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { readBackup } from "@/components/atlas/ImportView";
 import { ContributeForm } from "@/components/atlas/ContributeForm";
 import { DetailPanel } from "@/components/atlas/DetailPanel";
@@ -7,7 +10,7 @@ import { ImportView } from "@/components/atlas/ImportView";
 import { MethodView } from "@/components/atlas/MethodView";
 import { WordWeb } from "@/components/atlas/WordWeb";
 import { deleteStored, loadStored, persistAccounts } from "@/lib/atlas/db";
-import { connections, grouped, isDisplayed, languageLabels, normalize, personalEdges, search, tags, type Draft } from "@/lib/atlas/core";
+import { asIdentified, connections, displayName, grouped, isDisplayed, languageLabels, normalize, personalEdges, publicUserId, search, tags, type Draft } from "@/lib/atlas/core";
 import { SEED } from "@/lib/atlas/seed";
 import { NARRATIVE_FIELDS, type Account } from "@/lib/atlas/types";
 
@@ -16,6 +19,8 @@ const MAX_ARCHIVE = 36 * 1024 * 1024;
 type View = "explore" | "contribute" | "import" | "method";
 
 export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
+  const user = useCurrentUser();
+  const userId = user ? publicUserId(user.id) : "";
   const [records, setRecords] = useState<Account[]>(SEED);
   const [view, setView] = useState<View>(initialView);
   const [selected, setSelected] = useState<string | null>(SEED[0]?.id ?? null);
@@ -37,13 +42,14 @@ export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
     let cancelled = false;
     void (async () => {
       try {
-        const stored = await loadStored();
+        const stored = (await loadStored()).map(asIdentified);
         if (cancelled) return;
         if (!stored.length) {
           await persistAccounts(SEED);
           return;
         }
         setRecords(stored);
+        await persistAccounts(stored);
         setSelected((current) =>
           stored.some((record) => record.id === current) ? current : (stored.find(isDisplayed)?.id ?? stored[0]?.id ?? null),
         );
@@ -130,7 +136,7 @@ export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
       items.forEach((item, index) => {
         const id = `survey:${batch}:${index}`;
         if (records.some((record) => record.id === id)) return;
-        incoming.push({ ...item, id, createdAt: now, updatedAt: now });
+        incoming.push({ ...item, id, userId: publicUserId(id), attribution: "", createdAt: now, updatedAt: now });
       });
       if (records.length + incoming.length > MAX_RECORDS) throw new Error("Prototype limit: 200 accounts.");
       await persistAccounts(incoming);
@@ -147,7 +153,7 @@ export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
   const restore = async (file: File) => {
     try {
       const restored = await readBackup(file);
-      const incoming = restored.filter((record) => !records.some((item) => item.id === record.id));
+      const incoming = restored.map(asIdentified).filter((record) => !records.some((item) => item.id === record.id));
       if (records.length + incoming.length > MAX_RECORDS || JSON.stringify([...records, ...incoming]).length > MAX_ARCHIVE) {
         throw new Error("Restoring would exceed the archive capacity.");
       }
@@ -193,6 +199,17 @@ export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
               {item === "explore" ? "Explore" : item === "contribute" ? "Contribute" : item === "import" ? "Import & backup" : "Method"}
             </button>
           ))}
+          <SignedOut>
+            <Link to="/login" className="nav-link">
+              Log in
+            </Link>
+          </SignedOut>
+          <SignedIn>
+            <span className="badge">{userId}</span>
+            <button type="button" onClick={() => void signOut("/")}>
+              Log out
+            </button>
+          </SignedIn>
         </nav>
       </header>
       <div className={`status${isError ? " error" : ""}`} role="status" aria-live="polite">
@@ -348,14 +365,32 @@ export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
           </div>
         ) : null}
         {view === "contribute" ? (
-          <ContributeForm key={formMode.key} records={shown} edit={formMode.edit} copy={formMode.copy} onCancel={() => setView("explore")} onSave={save} />
+          user ? (
+            <ContributeForm
+              key={formMode.key}
+              records={shown}
+              edit={formMode.edit}
+              copy={formMode.copy}
+              userId={formMode.edit ? displayName(formMode.edit) : userId}
+              onCancel={() => setView("explore")}
+              onSave={save}
+            />
+          ) : (
+            <section className="form-panel">
+              <h2>Log in to add an account</h2>
+              <p className="intro">The tree shows a user ID, not a name. Log in and the ID is yours for every account you add.</p>
+              <Link to="/login" className="nav-link primary">
+                Log in
+              </Link>
+            </section>
+          )
         ) : null}
         {view === "import" ? (
           <ImportView
             held={records.filter((record) => !isDisplayed(record)).map((record) => ({
               id: record.id,
               expression: record.expression,
-              attribution: record.attribution,
+              userId: displayName(record),
             }))}
             onCommit={commit}
             onRestore={restore}

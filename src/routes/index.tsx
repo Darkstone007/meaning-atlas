@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Landing } from "@/components/atlas/Landing";
+import { AtlasApp } from "@/components/atlas/AtlasApp";
 
 export const Route = createFileRoute("/")({ component: Home });
 
 function Home() {
-  return <Landing />;
+  return <AtlasApp />;
 }

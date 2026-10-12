@@ -33,7 +33,6 @@ export const FIELD_LABELS: Record<NarrativeField, string> = {
   identity: "Being yourself",
   withheld: "Who you are around",
   listenerPractice: "Unfamiliar expressions",
-  attribution: "Display name",
 };
 
 const MEDIA_MIME =
@@ -116,7 +115,7 @@ export function search(records: Account[], query: string): Account[] {
     const values = [
       ...NARRATIVE_FIELDS.map((key) => record[key]),
       record.kind,
-      record.attribution,
+      record.userId,
       ...LAYERS.map((layer) => layerTags(record, layer).join(" ")),
       ...record.media.map((item) => item.caption),
     ];
@@ -178,9 +177,33 @@ export function consentFromCell(cell: string): Consent {
   };
 }
 
-export function displayName(record: Account, index: number): string {
-  const name = record.attribution.trim();
-  return name || `Account ${index + 1}`;
+const LEGACY_USER_IDS: Record<string, string> = {
+  "survey:ndeye-massa": "U-4F2A",
+  "survey:khadidjatou-massa": "U-91C7",
+  "survey:lana-cist-racun": "U-3B80",
+};
+
+/** Stable public handle. Not a name. */
+export function publicUserId(id: string): string {
+  const known = LEGACY_USER_IDS[id];
+  if (known) return known;
+  let hash = 2166136261;
+  for (let index = 0; index < id.length; index += 1) {
+    hash ^= id.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `U-${(hash >>> 0).toString(16).toUpperCase().padStart(6, "0").slice(0, 6)}`;
+}
+
+export function displayName(record: Account, _index?: number): string {
+  return record.userId || publicUserId(record.id);
+}
+
+/** Drop any stored name and attach a user ID. */
+export function asIdentified(record: Account): Account {
+  const userId = record.userId || publicUserId(record.id);
+  if (record.userId === userId && !record.attribution) return record;
+  return { ...record, userId, attribution: "" };
 }
 
 export function kindLabel(kind: Kind): string {
@@ -309,7 +332,8 @@ export function csvRecords(
         publicRecording: false,
         informOnly: false,
       },
-      attribution: read("attribution"),
+      attribution: "",
+      userId: "",
       expression: read("expression"),
       languages: read("languages") || defaults?.languages?.trim() || "",
       community: read("community") || defaults?.community?.trim() || "",

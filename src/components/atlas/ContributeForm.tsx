@@ -21,7 +21,6 @@ type DraftForm = {
   identity: string;
   withheld: string;
   listenerPractice: string;
-  attribution: string;
   relatedId: string;
   relatedReason: string;
   consent: Consent;
@@ -49,7 +48,6 @@ function blank(edit: Account | null, copy: Account | null): DraftForm {
     identity: source?.identity || "",
     withheld: source?.withheld || "",
     listenerPractice: source?.listenerPractice || "",
-    attribution: source?.attribution || "",
     relatedId: source?.relations[0]?.target || "",
     relatedReason: source?.relations[0]?.reason || "",
     consent: source?.consent || {
@@ -85,12 +83,14 @@ export function ContributeForm({
   records,
   edit,
   copy,
+  userId,
   onCancel,
   onSave,
 }: {
   records: Account[];
   edit: Account | null;
   copy: Account | null;
+  userId: string;
   onCancel: () => void;
   onSave: (account: Account) => Promise<void>;
 }) {
@@ -162,7 +162,8 @@ export function ContributeForm({
         typeReviewed: true,
         displayConsent: !consent.informOnly && (consent.publicWritten || consent.classWritten),
         consent,
-        attribution: form.attribution.trim(),
+        attribution: "",
+        userId: edit?.userId || userId,
         expression: form.expression.trim(),
         languages: form.languages.trim(),
         community: form.community.trim(),
@@ -419,11 +420,7 @@ export function ContributeForm({
             <span>{label}</span>
           </label>
         ))}
-        <label>
-          If your contribution is displayed, what name, if any, would you like shown?
-          <input maxLength={120} placeholder="Leave blank for no name" value={form.attribution} onChange={(event) => set("attribution", event.target.value)} />
-        </label>
-        <p className="quiet">A follow-up conversation is welcome in person. This archive does not store an email address or phone number.</p>
+        <p className="quiet">The tree shows your user ID, {userId}. Names are not placed on it.</p>
         <div className="row">
           <button className="primary" type="submit" disabled={busy}>
             {edit ? "Save changes" : "Add to the web"}

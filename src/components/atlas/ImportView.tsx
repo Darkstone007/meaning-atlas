@@ -31,7 +31,7 @@ export function ImportView({
   onRestore,
   onExport,
 }: {
-  held: { id: string; expression: string; attribution: string }[];
+  held: { id: string; expression: string; userId: string }[];
   onCommit: (items: Draft[]) => Promise<void>;
   onRestore: (file: File) => Promise<void>;
   onExport: () => void;
@@ -155,7 +155,6 @@ export function ImportView({
               <div key={item.expression + index}>
                 <h3>
                   {index + 1}. {item.expression} · {item.languages}
-                  {item.attribution ? ` · ${item.attribution}` : ""}
                 </h3>
                 {NARRATIVE_FIELDS.filter((key) => item[key] && !["expression", "languages"].includes(key)).map((key) => (
                   <p key={key}>
@@ -185,7 +184,7 @@ export function ImportView({
       {!held.length ? <p className="quiet">No withheld accounts are stored in this browser.</p> : null}
       {held.map((item) => (
         <p key={item.id} className="quiet">
-          {item.expression} · {item.attribution || "No name"} — kept in this browser, not shown in the web or shelves.
+          {item.expression} · {item.userId} — kept in this browser, not shown in the web or shelves.
         </p>
       ))}
 

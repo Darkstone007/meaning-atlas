@@ -2,7 +2,7 @@ import type { Account } from "./types.ts";
 
 const surveyed = "survey · 12 October 2026";
 
-function account(partial: Pick<Account, "id" | "expression" | "languages" | "community" | "attribution"> & Partial<Account>): Account {
+function account(partial: Pick<Account, "id" | "expression" | "languages" | "community" | "userId"> & Partial<Account>): Account {
   return {
     createdAt: "2026-10-12T00:00:00.000Z",
     updatedAt: "2026-10-12T00:00:00.000Z",
@@ -18,6 +18,7 @@ function account(partial: Pick<Account, "id" | "expression" | "languages" | "com
       publicRecording: false,
       informOnly: false,
     },
+    attribution: "",
     languagePractice: "",
     origin: "",
     meaning: "",
@@ -40,8 +41,8 @@ function account(partial: Pick<Account, "id" | "expression" | "languages" | "com
 /** Writing cleared for public display. Contact details are not stored. */
 export const SEED: Account[] = [
   account({
-    id: "survey:ndeye-massa",
-    attribution: "Ndeye Astou Ndiaye",
+    id: "acct-4f2a",
+    userId: "U-4F2A",
     expression: "Massa",
     languages: "Wolof",
     community: "Wolof",
@@ -60,8 +61,8 @@ export const SEED: Account[] = [
     tags: { emotion: ["care"], context: ["friends", "family", "informal"], intention: ["comfort"] },
   }),
   account({
-    id: "survey:khadidjatou-massa",
-    attribution: "Khadidjatou",
+    id: "acct-91c7",
+    userId: "U-91C7",
     expression: "Massa",
     languages: "Wolof",
     community: "Senegal",
@@ -82,8 +83,8 @@ export const SEED: Account[] = [
     tags: { emotion: ["care", "solidarity"], context: ["friends", "family", "acquaintance"], intention: ["comfort"] },
   }),
   account({
-    id: "survey:lana-cist-racun",
-    attribution: "Lana",
+    id: "acct-3b80",
+    userId: "U-3B80",
     expression: "Čist račun - duga ljubav",
     languages: "Montenegrin; Serbian; Bosnian",
     community: "The Balkans",
