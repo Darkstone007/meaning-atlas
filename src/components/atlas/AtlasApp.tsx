@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { readBackup } from "@/components/atlas/ImportView";
 import { ContributeForm } from "@/components/atlas/ContributeForm";
@@ -14,9 +15,9 @@ const MAX_RECORDS = 200;
 const MAX_ARCHIVE = 36 * 1024 * 1024;
 type View = "explore" | "contribute" | "import" | "method";
 
-export function AtlasApp() {
+export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
   const [records, setRecords] = useState<Account[]>(SEED);
-  const [view, setView] = useState<View>("explore");
+  const [view, setView] = useState<View>(initialView);
   const [selected, setSelected] = useState<string | null>(SEED[0]?.id ?? null);
   const [query, setQuery] = useState("");
   const [layer, setLayer] = useState("emotion");
@@ -182,10 +183,10 @@ export function AtlasApp() {
   return (
     <div className="atlas">
       <header>
-        <div className="brand">
+        <Link to="/" className="brand">
           Meaning Atlas
           <small>WORDS HOLD MORE THAN DEFINITIONS</small>
-        </div>
+        </Link>
         <nav aria-label="Main navigation">
           {(["explore", "contribute", "import", "method"] as const).map((item) => (
             <button key={item} type="button" className={view === item ? "active" : ""} onClick={() => go(item)}>

@@ -286,6 +286,72 @@ body {
   .atlas .book strong { font-size: 21px; }
 }
 
+.atlas a.brand,
+.atlas a.nav-link {
+  color: inherit;
+  text-decoration: none;
+}
+.atlas a.nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 11px 16px;
+}
+.atlas a.nav-link:hover { border-color: var(--green); }
+.atlas a.nav-link.primary { background: var(--green); color: var(--bg); border-color: var(--green); }
+.atlas .landing {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 28px 40px;
+  align-items: center;
+}
+.atlas .landing-actions { margin: 22px 0 14px; }
+.atlas .landing-note { max-width: 640px; }
+.atlas .landing-figure { margin: 0; }
+.atlas .landing-figure svg { width: 100%; height: auto; display: block; }
+.atlas .landing-figure figcaption { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.atlas .landing-node rect { fill: #172b2e; stroke: #6d8a76; }
+.atlas .landing-node.word rect { fill: #152725; stroke: #c4efaa; }
+.atlas .landing-node text {
+  fill: var(--ink);
+  text-anchor: middle;
+  font-family: var(--font-sans);
+}
+.atlas .landing-node.word text {
+  fill: var(--green);
+  font-family: var(--font-serif);
+}
+.atlas .landing-rules {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.atlas .landing-rules li {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.atlas .landing-rules strong {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 400;
+  margin-bottom: 6px;
+}
+.atlas .landing-rules span { color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+@media (max-width: 900px) {
+  .atlas .landing,
+  .atlas .landing-rules { grid-template-columns: 1fr; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .atlas * { scroll-behavior: auto !important; }
 }
