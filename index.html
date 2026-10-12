@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meaning Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/atlas.css">
+</head>
+<body>
+  <section id="gate" class="gate">
+    <div class="card">
+      <div class="eyebrow">A living archive</div>
+      <h1>Meaning Atlas</h1>
+      <p class="lede">A word opens into the person who said it. You can look around as a guest, or keep a record so your words stay with your ID.</p>
+      <div class="stack">
+        <button class="btn primary" id="guest" type="button">Enter as a guest</button>
+        <button class="btn" id="show-return" type="button">I already have an ID</button>
+      </div>
+      <form id="return-form" class="panel" hidden>
+        <label>Your ID<input id="return-id" autocomplete="username" placeholder="U-0000" maxlength="12"></label>
+        <label>Passphrase<input id="return-pass" type="password" autocomplete="current-password"></label>
+        <button class="btn primary" type="submit">Come back in</button>
+      </form>
+      <form id="create-form" class="panel" hidden>
+        <label>Choose a passphrase<input id="create-pass" type="password" autocomplete="new-password" minlength="4"></label>
+        <button class="btn primary" type="submit">Make my ID</button>
+      </form>
+      <div id="made" hidden>
+        <p class="lede">Write this down. It is how you come back to your words on this browser.</p>
+        <div class="id-show" id="made-id"></div>
+        <button class="btn primary" id="made-go" type="button">Enter the atlas</button>
+      </div>
+      <p class="note" id="gate-note"></p>
+      <p class="fine">No names are shown. A guest ID and a saved ID both live in this browser. GitHub Pages cannot keep a shared login on a server.</p>
+      <button class="btn ghost" id="show-create" type="button">Make a new record instead</button>
+    </div>
+  </section>
+
+  <div id="app" class="app" hidden>
+    <header class="top">
+      <a class="brand" href="./">Meaning Atlas</a>
+      <nav class="nav" aria-label="Atlas">
+        <button type="button" data-view="web" class="active">Word web</button>
+        <button type="button" data-view="shelves">Shelves</button>
+        <button type="button" data-view="mine">Your words</button>
+        <button type="button" data-view="add">Add a word</button>
+      </nav>
+      <div class="who">
+        <span class="pill" id="who"></span>
+        <button type="button" id="leave">Leave</button>
+      </div>
+    </header>
+    <main class="workspace">
+      <section id="view-web">
+        <div class="tools">
+          <label class="grow">Search
+            <input id="search" type="search" placeholder="Word, language or meaning">
+          </label>
+          <label>Similarity layer
+            <select id="layer">
+              <option value="emotion">Emotion</option>
+              <option value="context">Context</option>
+              <option value="intention">Intention</option>
+              <option value="none">Branches only</option>
+            </select>
+          </label>
+        </div>
+        <p class="legend">Solid line: this person said this word. Dashed line: they used the same label. Place is only so you can see it.</p>
+        <div id="stage" class="stage" aria-label="Word web"></div>
+        <p class="count" id="count"></p>
+        <article class="story" id="story"></article>
+      </section>
+      <section id="view-shelves" hidden>
+        <div id="shelves" class="shelves"></div>
+      </section>
+      <section id="view-mine" hidden>
+        <div id="mine"></div>
+      </section>
+      <section id="view-add" hidden>
+        <form id="add" class="form">
+          <div class="eyebrow">Your account</div>
+          <h2>What does this word mean to you?</h2>
+          <p class="lede">It will sit under your ID. It will not replace anyone else’s account of the same word.</p>
+          <div class="two">
+            <label>Word or expression<input name="expression" required maxlength="120"></label>
+            <label>Language or languages<input name="languages" required maxlength="240" placeholder="Separate more than one with ;"></label>
+          </div>
+          <label>Community or variety, if it matters<input name="community" maxlength="240"></label>
+          <label>What does it mean to you?<textarea name="meaning" required maxlength="4000"></textarea></label>
+          <details>
+            <summary>The rest, if you want it</summary>
+            <label>An example<textarea name="example" maxlength="4000"></textarea></label>
+            <label>How it feels<textarea name="feeling" maxlength="4000"></textarea></label>
+            <label>Who you use it with<textarea name="context" maxlength="4000"></textarea></label>
+            <label>What you are trying to do<textarea name="intention" maxlength="4000"></textarea></label>
+            <label>How you would explain it<textarea name="rephrasing" maxlength="4000"></textarea></label>
+            <label>What changes in that explanation<textarea name="change" maxlength="4000"></textarea></label>
+            <label>When you hold it back<textarea name="withheld" maxlength="4000"></textarea></label>
+          </details>
+          <p class="legend">Optional labels. A dashed line appears only when two accounts choose the same one.</p>
+          <div class="checks" id="tag-emotion"></div>
+          <div class="checks" id="tag-context"></div>
+          <div class="checks" id="tag-intention"></div>
+          <label class="fine"><input id="consent" type="checkbox" required> Show this account on the web in this browser. Do not include anyone’s name or contact details.</label>
+          <div class="row">
+            <button class="btn primary" type="submit">Place it on the web</button>
+          </div>
+          <p class="note" id="add-note"></p>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script src="js/data.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
