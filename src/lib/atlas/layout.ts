@@ -55,15 +55,12 @@ export function layoutScene(options: {
   const groups = grouped(visible).filter((group) => group.accounts.some((record) => shownIds.has(record.id)));
   const raw: { id: string; label: string; type: SceneNode["type"]; open?: string; section?: string; p: number[]; title: string }[] = [];
   const tree: [string, string][] = [];
-  const compact = width < 720;
-  const fit = compact ? 0.68 : 1;
-  const fitted = (point: number[]) => point.map((value) => value * fit);
+  const scale = Math.max(0.55, Math.min((width - 72) / 560, (height - 64) / 320));
   const yaw = (yawDeg * Math.PI) / 180;
   const pitch = (pitchDeg * Math.PI) / 180;
-  const scale = Math.max(0.42, Math.min((width - 72) / 500, (height - 64) / 430));
 
   groups.forEach((group, index) => {
-    const angle = (2 * Math.PI * index) / Math.max(groups.length, 1) - Math.PI / 2;
+    const x = (index - (groups.length - 1) / 2) * 230;
     const wordId = `w${index}`;
     const first = group.accounts.find((record) => shownIds.has(record.id));
     raw.push({
@@ -71,41 +68,23 @@ export function layoutScene(options: {
       label: group.expression,
       type: "word",
       open: first?.id,
-      p: fitted([Math.cos(angle) * 150, Math.sin(angle) * 130, -30]),
+      p: [x, -150, 0],
       title: `${group.expression}${group.community ? ` · ${group.community}` : ""}`,
     });
     const accounts = group.accounts.filter((record) => shownIds.has(record.id));
     accounts.forEach((record, child) => {
-      const offset = (child - (accounts.length - 1) / 2) * 0.35;
-      const childAngle = angle + offset;
+      const spread = accounts.length === 1 ? 0 : (child - (accounts.length - 1) / 2) * 100;
       raw.push({
         id: record.id,
         label: displayName(record, records.indexOf(record)),
         type: "response",
         open: record.id,
-        p: fitted([Math.cos(childAngle) * 235, Math.sin(childAngle) * 195, 50 + (child % 3) * 25]),
+        p: [x + spread, 40, 20],
         title: `${displayName(record, records.indexOf(record))} · ${record.expression}`,
       });
       tree.push([wordId, record.id]);
     });
   });
-
-  const focus = raw.find((node) => node.id === selectedId);
-  if (focus && !compact) {
-    LEAVES.forEach((leaf, index) => {
-      const angle = (index * 2 * Math.PI) / LEAVES.length;
-      const id = `leaf${index}`;
-      raw.push({
-        id,
-        label: leaf.label,
-        type: "leaf",
-        section: leaf.section,
-        p: [focus.p[0] * 0.45 + Math.cos(angle) * 78, focus.p[1] * 0.45 + Math.sin(angle) * 72, 140],
-        title: leaf.label,
-      });
-      tree.push([focus.id, id]);
-    });
-  }
 
   const pos = new Map(raw.map((node) => [node.id, project(node.p, yaw, pitch, width, height, scale)]));
   const lines: SceneLine[] = [];

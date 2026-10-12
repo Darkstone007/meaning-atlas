@@ -10,7 +10,7 @@ import { ImportView } from "@/components/atlas/ImportView";
 import { MethodView } from "@/components/atlas/MethodView";
 import { WordWeb } from "@/components/atlas/WordWeb";
 import { deleteStored, loadStored, persistAccounts } from "@/lib/atlas/db";
-import { asIdentified, connections, displayName, grouped, isDisplayed, languageLabels, normalize, personalEdges, publicUserId, search, tags, type Draft } from "@/lib/atlas/core";
+import { asIdentified, connections, displayName, grouped, isDisplayed, languageLabels, normalize, personalEdges, publicUserId, search, type Draft } from "@/lib/atlas/core";
 import { SEED } from "@/lib/atlas/seed";
 import { NARRATIVE_FIELDS, type Account } from "@/lib/atlas/types";
 
@@ -74,7 +74,6 @@ export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
   const visible = search(shown, query);
   const edges = layer === "personal" ? personalEdges(visible) : connections(visible, layer);
   const groups = grouped(visible);
-  const languages = [...new Set(shown.flatMap((record) => tags(record.languages)))];
 
   const openForm = (edit: Account | null, copy: Account | null) => {
     setFormMode({ edit, copy, key: Date.now() });
@@ -222,146 +221,111 @@ export function AtlasApp({ initialView = "explore" }: { initialView?: View }) {
       </div>
       <main>
         {view === "explore" ? (
-          <div>
-            <span className="eyebrow">An archive shaped by the people who speak</span>
-            <h1>
-              A word is only
-              <br />
-              the beginning.
-            </h1>
-            <p className="intro">
-              Follow an expression into the accounts people actually gave. The same spelling can hold different meanings. A dashed line is a shared label, not a translation.
-            </p>
-            <div className="stats">
-              <span>
-                <strong>{shown.length}</strong> accounts
-              </span>
-              <span>
-                <strong>{grouped(shown).length}</strong> expressions
-              </span>
-              <span>
-                <strong>{languages.length}</strong> language labels
-              </span>
-            </div>
-            <div className="toolbar">
-              <label>
-                Find an expression, language, feeling or name
-                <input type="search" value={query} placeholder="Search the archive" onChange={(event) => setQuery(event.target.value)} />
+          <div className="web-home">
+            <p className="web-note">Manual coding · no model · user IDs, not names</p>
+            <div className="web-bar">
+              <span className="web-mark">Meaning Web</span>
+              <button type="button" className={shelvesOn ? "" : "active"} aria-pressed={!shelvesOn} onClick={() => setShelvesOn(false)}>
+                Word web
+              </button>
+              <button type="button" className={shelvesOn ? "active" : ""} aria-pressed={shelvesOn} onClick={() => setShelvesOn(true)}>
+                Language shelves
+              </button>
+              <label className="web-search">
+                Search
+                <input type="search" value={query} placeholder="Word, language or meaning" onChange={(event) => setQuery(event.target.value)} />
               </label>
+            </div>
+            <div className="web-controls">
               <label>
-                Connection layer
+                Similarity layer
                 <select value={layer} onChange={(event) => setLayer(event.target.value)}>
-                  <option value="emotion">Shared feeling</option>
-                  <option value="context">Shared context</option>
-                  <option value="intention">Shared intention</option>
-                  <option value="media">Shared media annotation</option>
-                  <option value="personal">Participant associations</option>
-                  <option value="none">Tree branches only</option>
+                  <option value="emotion">Emotion</option>
+                  <option value="context">Context</option>
+                  <option value="intention">Intention</option>
+                  <option value="media">Media</option>
+                  <option value="personal">Personal</option>
+                  <option value="none">Branches only</option>
                 </select>
               </label>
-              <div className="row">
-                <button type="button" className={shelvesOn ? "" : "active"} aria-pressed={!shelvesOn} onClick={() => setShelvesOn(false)}>
-                  Web
-                </button>
-                <button type="button" className={shelvesOn ? "active" : ""} aria-pressed={shelvesOn} onClick={() => setShelvesOn(true)}>
-                  Shelves
-                </button>
-              </div>
+              <label>
+                Rotate
+                <input type="range" min={-180} max={180} value={yaw} onChange={(event) => setYaw(Number(event.target.value))} />
+              </label>
+              <label>
+                Tilt
+                <input type="range" min={-40} max={40} value={pitch} onChange={(event) => setPitch(Number(event.target.value))} />
+              </label>
             </div>
-            <div className="workspace">
-              <div>
-                <div className="graph-wrap" hidden={shelvesOn}>
-                  <div className="graph-head">
-                    <span>
-                      {visible.length} accounts · {edges.length} connections
-                    </span>
-                    <span>Perspective view</span>
-                  </div>
-                  <WordWeb
-                    visible={visible}
-                    records={records}
-                    edges={edges}
-                    selectedId={selected}
-                    yaw={yaw}
-                    pitch={pitch}
-                    onSelect={setSelected}
-                    onLeaf={(section) => {
-                      document.getElementById(`section-${section}`)?.scrollIntoView({
-                        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-                        block: "center",
-                      });
-                    }}
-                    onContribute={() => openForm(null, null)}
-                  />
-                  <div className="graph-foot">
-                    <span>Solid: a response branch</span>
-                    <span>Dashed: a labelled connection</span>
-                    <label>
-                      Rotate
-                      <input type="range" min={-180} max={180} value={yaw} onChange={(event) => setYaw(Number(event.target.value))} />
-                    </label>
-                    <label>
-                      Tilt
-                      <input type="range" min={-40} max={40} value={pitch} onChange={(event) => setPitch(Number(event.target.value))} />
-                    </label>
-                  </div>
-                </div>
-                <div hidden={!shelvesOn}>
-                  {!groups.length ? <p>No expressions yet. Add a contribution or import survey responses.</p> : null}
-                  {(() => {
-                    const shelfLanguages = [
-                      ...new Map(
-                        groups.flatMap((group) => languageLabels(group.languages).map((label) => [normalize(label), label])),
-                      ).values(),
-                    ].sort((a, b) => a.localeCompare(b, "en"));
-                    return shelfLanguages.map((language) => {
-                      const shelf = groups.filter((group) =>
-                        languageLabels(group.languages).some((label) => normalize(label) === normalize(language)),
-                      );
-                      return (
-                        <section key={language} className="shelf">
-                          <div className="shelf-head">
-                            <h2>{language}</h2>
-                            <span className="quiet">{shelf.length} expressions</span>
-                          </div>
-                          <div className="shelf-cards">
-                            {shelf.map((group) => (
-                              <button
-                                key={group.key}
-                                type="button"
-                                className="book"
-                                onClick={() => {
-                                  setSelected(group.accounts[0].id);
-                                  setShelvesOn(false);
-                                }}
-                              >
-                                <strong>{group.expression}</strong>
-                                <span>{group.community || "Community not specified"}</span>
-                                <span>{group.accounts.length} accounts · locate in web</span>
-                              </button>
-                            ))}
-                          </div>
-                        </section>
-                      );
-                    });
-                  })()}
-                </div>
-                <p className="quiet">
-                  {visible.length} matching accounts. Connections compare accounts, not whole languages.
-                  {visible.length > 50 ? " The web shows the first 50; shelves keep the rest." : ""} Same spelling with a different community label stays a separate word.
-                </p>
-              </div>
-              <DetailPanel
-                records={shown}
+            <p className="quiet web-legend">Solid: word → response · Dashed: shared manual tag · Position is for navigation</p>
+            <div className="graph-wrap" hidden={shelvesOn}>
+              <WordWeb
                 visible={visible}
-                selectedId={selected}
+                records={records}
                 edges={edges}
+                selectedId={selected}
+                yaw={yaw}
+                pitch={pitch}
                 onSelect={setSelected}
-                onAnother={(account) => openForm(null, account)}
-                onEdit={(account) => openForm(account, null)}
-                onRemove={(account) => void remove(account)}
+                onLeaf={(section) => {
+                  document.getElementById(`section-${section}`)?.scrollIntoView({
+                    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+                    block: "center",
+                  });
+                }}
+                onContribute={() => openForm(null, null)}
               />
             </div>
+            <div hidden={!shelvesOn}>
+              {!groups.length ? <p>No expressions yet. Add a contribution or import survey responses.</p> : null}
+              {(() => {
+                const shelfLanguages = [
+                  ...new Map(groups.flatMap((group) => languageLabels(group.languages).map((label) => [normalize(label), label]))).values(),
+                ].sort((a, b) => a.localeCompare(b, "en"));
+                return shelfLanguages.map((language) => {
+                  const shelf = groups.filter((group) =>
+                    languageLabels(group.languages).some((label) => normalize(label) === normalize(language)),
+                  );
+                  return (
+                    <section key={language} className="shelf">
+                      <div className="shelf-head">
+                        <h2>{language}</h2>
+                        <span className="quiet">{shelf.length} expressions</span>
+                      </div>
+                      <div className="shelf-cards">
+                        {shelf.map((group) => (
+                          <button
+                            key={group.key}
+                            type="button"
+                            className="book"
+                            onClick={() => {
+                              setSelected(group.accounts[0].id);
+                              setShelvesOn(false);
+                            }}
+                          >
+                            <strong>{group.expression}</strong>
+                            <span>{group.accounts.length} responses</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                });
+              })()}
+            </div>
+            <p className="quiet web-count">
+              {visible.length} of {shown.length} responses · {edges.length} shared-tag connections in the selected layer
+            </p>
+            <DetailPanel
+              records={shown}
+              visible={visible}
+              selectedId={selected}
+              edges={edges}
+              onSelect={setSelected}
+              onAnother={(account) => openForm(null, account)}
+              onEdit={(account) => openForm(account, null)}
+              onRemove={(account) => void remove(account)}
+            />
           </div>
         ) : null}
         {view === "contribute" ? (

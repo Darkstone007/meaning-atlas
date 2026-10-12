@@ -61,8 +61,8 @@ export function WordWeb({
               y1={line.y1}
               x2={line.x2}
               y2={line.y2}
-              stroke={line.dashed ? "#c9b8f2" : "#779081"}
-              strokeOpacity={line.dashed ? 0.7 : 0.38}
+              stroke={line.dashed ? "#cbb8d8" : "#5a3f72"}
+              strokeOpacity={line.dashed ? 0.9 : 0.85}
               strokeDasharray={line.dashed ? "5 5" : undefined}
             />
           ))}
