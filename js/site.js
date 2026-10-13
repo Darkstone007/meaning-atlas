@@ -145,7 +145,10 @@ function show(name) {
     if (node) node.hidden = item !== name;
   });
   document.querySelectorAll("[data-view]").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
-  if (name === "web") renderWeb();
+  if (name === "web") {
+    renderWeb();
+    if (window.innerWidth < 1280) requestAnimationFrame(() => { if (view === "web") renderWeb(); });
+  }
   if (name === "shelves") renderShelves();
   if (name === "account") renderAccount();
   if (name === "add") {
@@ -215,16 +218,19 @@ function who() {
 // The gap depends on how wide the label is, then the labels are kept inside the map.
 function separate(nodes) {
   const stage = document.getElementById("stage");
-  const pad = 120;
+  const wide = window.innerWidth >= 1280;
+  if (wide) stage.style.height = "";
+  const pad = wide ? 120 : Math.max(46, Math.min(72, stage.clientWidth * 0.14));
+  const scale = wide ? 1 : 0.58;
   for (let pass = 0; pass < 28; pass++) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         let dx = nodes[j].x - nodes[i].x;
         let dy = nodes[j].y - nodes[i].y;
-        const iw = Math.min(240, 40 + nodes[i].expression.length * 7.2);
-        const jw = Math.min(240, 40 + nodes[j].expression.length * 7.2);
-        const overlapX = (iw + jw) / 2 + 18 - Math.abs(dx);
-        const overlapY = 58 - Math.abs(dy);
+        const iw = Math.min(wide ? 240 : 150, (40 + nodes[i].expression.length * 7.2) * scale);
+        const jw = Math.min(wide ? 240 : 150, (40 + nodes[j].expression.length * 7.2) * scale);
+        const overlapX = (iw + jw) / 2 + (wide ? 18 : 10) - Math.abs(dx);
+        const overlapY = (wide ? 58 : 46) - Math.abs(dy);
         if (overlapX > 0 && overlapY > 0) {
           if (overlapX <= overlapY) {
             const push = overlapX / 2 + 1;
@@ -241,9 +247,21 @@ function separate(nodes) {
       }
     }
   }
+  if (!wide && stage.clientWidth > 0 && stage.clientWidth < 720) {
+    const cols = stage.clientWidth < 520 ? 2 : 3;
+    const colW = (stage.clientWidth - pad * 2) / cols;
+    const rowH = 78;
+    nodes.forEach((node, index) => {
+      node.x = pad + colW * (index % cols) + colW / 2;
+      node.y = 54 + Math.floor(index / cols) * rowH;
+    });
+    const need = 54 + Math.ceil(nodes.length / cols) * rowH + 28;
+    if (need > 280) stage.style.height = need + "px";
+    return;
+  }
   nodes.forEach((node) => {
-    node.x = Math.max(pad, Math.min(stage.clientWidth - pad, node.x));
-    node.y = Math.max(46, Math.min(stage.clientHeight - 46, node.y));
+    node.x = Math.max(pad, Math.min(Math.max(pad, stage.clientWidth - pad), node.x));
+    node.y = Math.max(46, Math.min(Math.max(46, stage.clientHeight - 46), node.y));
   });
 }
 // Labels both words were given on the current layer. No shared label means no line.
@@ -264,12 +282,15 @@ function renderWeb() {
   if (!list.length) { renderPanel(); return; }
   const layer = document.getElementById("layer").value;
   const golden = Math.PI * (3 - Math.sqrt(5));
+  const wide = window.innerWidth >= 1280;
+  const radius = wide ? 280 : Math.max(110, Math.min(230, (stage.clientWidth || 360) * 0.32));
+  const ySpan = wide ? 170 : Math.max(80, (stage.clientHeight || 320) * 0.26);
   const nodes = list.map((group, index) => {
     const count = Math.max(list.length, 2);
     const y = 1 - (index / (count - 1)) * 2;
     const ring = Math.sqrt(Math.max(0, 1 - y * y));
     const theta = golden * index;
-    const point = project([Math.cos(theta) * ring * 280, y * 170, Math.sin(theta) * ring * 280]);
+    const point = project([Math.cos(theta) * ring * radius, y * ySpan, Math.sin(theta) * ring * radius]);
     return { ...group, x: point[0], y: point[1] };
   });
   separate(nodes);
@@ -315,6 +336,7 @@ function renderWeb() {
     button.innerHTML = `<b>${esc(node.expression)}</b><small>${esc(node.language)}${node.accounts.length > 1 ? " · " + node.accounts.length + " accounts" : ""}${example ? " · example" : ""}</small>`;
     button.style.left = node.x + "px";
     button.style.top = node.y + "px";
+    button.style.zIndex = node.key === selected ? "3" : "1";
     button.onpointerdown = (event) => event.stopPropagation();
     button.onclick = () => { selectedLine = null; panelMode = "word"; selected = node.key; renderWeb(); };
     stage.append(button);
@@ -632,9 +654,11 @@ document.getElementById("add").onsubmit = async (event) => {
     }
     editingId = null;
   } else state.records.push(record);
-  save();
+  try { save(); } catch { /* The word is still on the map for this visit if the browser cannot store it. */ }
   setupLabels();
   form.reset();
+  const search = document.getElementById("search");
+  if (search) search.value = "";
   selected = norm(record.expression) + "|" + norm(record.language);
   show("web");
 };
