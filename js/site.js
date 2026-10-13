@@ -119,14 +119,31 @@ function decodeShare(value) {
   const pad = value.length % 4 === 0 ? "" : "=".repeat(4 - (value.length % 4));
   return decodeURIComponent(escape(atob(value.replace(/-/g, "+").replace(/_/g, "/") + pad)));
 }
+let slots = 0;
+const slotQueue = [];
+// A few reads at once. One word is stored in pieces, and waiting for each piece in turn made login feel late.
+function withSlot(job) {
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      slots += 1;
+      Promise.resolve().then(job).then(resolve, reject).finally(() => {
+        slots -= 1;
+        const next = slotQueue.shift();
+        if (next) next();
+      });
+    };
+    if (slots < 6) start();
+    else slotQueue.push(start);
+  });
+}
 async function kvGet(key) {
-  const response = await fetch(KV + "/GetValue/" + KV_APP + "/" + key);
+  const response = await withSlot(() => fetch(KV + "/GetValue/" + KV_APP + "/" + key));
   if (!response.ok) throw new Error("The shared copy did not answer (" + response.status + ").");
   const data = await response.json();
   return data == null ? "" : String(data);
 }
 async function kvSet(key, value) {
-  const response = await fetch(KV + "/UpdateValue/" + KV_APP + "/" + key + "/" + value, { method: "POST" });
+  const response = await withSlot(() => fetch(KV + "/UpdateValue/" + KV_APP + "/" + key + "/" + value, { method: "POST" }));
   if (!response.ok) throw new Error("The shared copy did not save (" + response.status + ").");
 }
 async function writeBlob(name, value) {
@@ -139,8 +156,8 @@ async function writeBlob(name, value) {
 async function readBlob(name) {
   const count = Number(await kvGet(name + "-n")) || 0;
   if (!count) return null;
-  let encoded = "";
-  for (let index = 0; index < count; index++) encoded += await kvGet(name + "-" + index);
+  const parts = await Promise.all(Array.from({ length: count }, (_, index) => kvGet(name + "-" + index)));
+  const encoded = parts.join("");
   if (!encoded) return null;
   return JSON.parse(decodeShare(encoded));
 }
@@ -189,8 +206,10 @@ async function publishAccount(account) {
 async function pullAccounts() {
   const ids = (await readBlob("account-ids")) || [];
   const map = new Map(knownIds().map((item) => [item.id, item]));
-  for (const id of ids) {
-    const remote = await readBlob("a-" + id);
+  const remotes = await Promise.all(ids.map(async (id) => {
+    try { return [id, await readBlob("a-" + id)]; } catch { return [id, null]; }
+  }));
+  for (const [id, remote] of remotes) {
     if (!remote) continue;
     const local = map.get(id) || {};
     map.set(id, { ...local, ...remote, pass: remote.pass || local.pass || "" });
@@ -220,14 +239,13 @@ async function refreshShared(full) {
   if (!full) {
     const rev = await kvGet("rev");
     if (rev && rev === seenRev) return;
-    seenRev = rev;
   }
   const localById = new Map(state.records.map((record) => [record.id, record]));
   const ids = (await readBlob("word-ids")) || [];
+  const loaded = await Promise.all(ids.map((id) => readBlob("w-" + id)));
   const byId = new Map();
-  for (const id of ids) {
-    const record = await readBlob("w-" + id);
-    if (!record) continue;
+  loaded.forEach((record) => {
+    if (!record) return;
     const previous = localById.get(record.id);
     if (previous) {
       if (!record.image && previous.image) record.image = previous.image;
@@ -235,7 +253,7 @@ async function refreshShared(full) {
       if (!record.video && previous.video) record.video = previous.video;
     }
     byId.set(record.id, record);
-  }
+  });
   const pending = state.records.filter((record) => record.id && !byId.has(record.id));
   for (const record of pending) {
     await publishWord(record);
@@ -833,15 +851,18 @@ document.getElementById("add").onsubmit = async (event) => {
   selected = norm(record.expression) + "|" + norm(record.language);
   show("web");
 };
-// Come in as a guest or with an ID, then open the map or the account page.
-function enterAs(id, next) {
+// Come in as a guest or with an ID.
+// The map stays closed until the shared words have arrived, so this visit does not open on an old copy.
+async function enterAs(id, next) {
+  const note = document.getElementById("welcome-note");
+  if (note && next !== "profile") note.textContent = "Bringing the words in.";
   const known = knownIds().find((item) => item.id === id) || {};
   state.session = { id, reveal: Boolean(known.reveal), name: known.name || "", contact: Boolean(known.contact), contactHow: known.contactHow || "", similar: Boolean(known.similar), passIsId: known.passIsId === true };
   sessionStorage.setItem("atlas-open", "1");
   save();
+  try { await syncShared(false); } catch { /* Open with the words already on this browser. */ }
   who();
   show(next || "web");
-  syncShared().catch(() => {});
 }
 // IDs made on this browser, with the hashed passphrase and the account choices.
 function knownIds() {
@@ -1172,6 +1193,7 @@ if (opening) opening.textContent = siteCopy().welcome;
 who();
 show("web");
 syncShared(true).catch(() => {});
-setInterval(() => { if (document.visibilityState === "visible") syncShared(false).catch(() => {}); }, 120000);
+// An open page asks if anything new was saved. It does not sit for two minutes.
+setInterval(() => { if (document.visibilityState === "visible") syncShared(false).catch(() => {}); }, 4000);
 window.addEventListener("focus", () => { syncShared(false).catch(() => {}); });
 window.addEventListener("resize", () => { if (view === "web") renderWeb(); });
