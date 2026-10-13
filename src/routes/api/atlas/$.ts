@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { addEntry, clearCookie, currentProfile, enter, listEntries, listProfiles, sessionCookie, setReveal } from "@/lib/atlas/store";
+import { addEntry, clearCookie, currentProfile, enter, listEntries, listProfiles, sessionCookie, setReveal, updateEntry } from "@/lib/atlas/store";
 
 function json(body: unknown, status = 200, cookie?: string) {
   const headers = new Headers({ "content-type": "application/json" });
@@ -36,6 +36,12 @@ async function handle({ request }: { request: Request }) {
       const profile = await currentProfile(request);
       if (!profile) return json({ error: "Come in first." }, 401);
       const id = await addEntry(profile.id, await request.json());
+      return json({ id });
+    }
+    if (request.method === "POST" && name === "update") {
+      const profile = await currentProfile(request);
+      if (!profile) return json({ error: "Come in first." }, 401);
+      const id = await updateEntry(profile.id, await request.json());
       return json({ id });
     }
     return json({ error: "Not found." }, 404);

@@ -211,6 +211,49 @@ export function Carry() {
   }, [groups, yaw, pitch, size, layer]);
 
   const chosen = groups.find((group) => group.key === selected) || null;
+  const [editing, setEditing] = useState<Entry | null>(null);
+
+  if (!profileId) {
+    return (
+      <section className="carry-gate">
+        <div className="carry-card">
+          <p className="carry-eyebrow">Meaning Atlas</p>
+          <h1>Welcome</h1>
+          <p className="carry-lede">Choose how you come in before the archive opens. A guest can look and add on this visit. An ID lets you come back, see what you posted, and edit it. Your ID stays hidden unless you later choose to show it.</p>
+          {gate === "home" ? (
+            <div className="carry-stack">
+              <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
+              <button type="button" onClick={() => setGate("return")}>Log in with an ID</button>
+              <button type="button" onClick={() => setGate("create")}>Make an ID</button>
+            </div>
+          ) : null}
+          {gate === "return" ? (
+            <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
+              <label>Your ID<input name="id" required placeholder="U-0000" autoComplete="username" /></label>
+              <label>Passphrase<input name="pass" type="password" required autoComplete="current-password" /></label>
+              <button className="carry-primary" type="submit">Log in</button>
+              <button type="button" onClick={() => setGate("home")}>Back</button>
+            </form>
+          ) : null}
+          {gate === "create" ? (
+            <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "create", passphrase: String(data.get("pass")) }); }}>
+              <label>Choose a passphrase<input name="pass" type="password" minLength={4} required autoComplete="new-password" /></label>
+              <button className="carry-primary" type="submit">Make my ID</button>
+              <button type="button" onClick={() => setGate("home")}>Back</button>
+            </form>
+          ) : null}
+          {gate === "made" ? (
+            <div>
+              <p className="carry-lede">Write this down. It is how you log in again.</p>
+              <p className="carry-id">{madeId}</p>
+              <button className="carry-primary" type="button" onClick={() => void refresh()}>Enter the atlas</button>
+            </div>
+          ) : null}
+          {note ? <p className="carry-bad">{note}</p> : null}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="carry">
@@ -223,17 +266,17 @@ export function Carry() {
           {profileId ? (
             <>
               <button type="button" className={view === "shelves" ? "on" : ""} onClick={() => setView("shelves")}>Shelves</button>
-              <button type="button" className={view === "add" ? "on" : ""} onClick={() => setView("add")}>Add a word</button>
-              <button type="button" className={view === "people" ? "on" : ""} onClick={() => setView("people")}>Profiles</button>
+              <button type="button" className={view === "add" ? "on" : ""} onClick={() => { setEditing(null); setView("add"); }}>Add a word</button>
+              <button type="button" className={view === "people" ? "on" : ""} onClick={() => setView("people")}>Your account</button>
             </>
           ) : null}
         </nav>
         <div className="carry-who">
           {profileId ? <span>{reveal ? profileId : "ID hidden"}</span> : null}
-          {profileId ? <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { setProfileId(null); setView("web"); })}>Leave</button> : null}
+          {profileId ? <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { setProfileId(null); setGate("home"); setView("web"); })}>Log out</button> : null}
         </div>
       </header>
-      {view === "web" || !profileId ? (
+      {view === "web" ? (
         <main className="carry-main">
           <div className="carry-tools">
             <label>Search<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Word, language or meaning" /></label>
@@ -278,50 +321,23 @@ export function Carry() {
             <label>Tilt<input type="range" min={-55} max={55} value={pitch} onChange={(event) => setPitch(Number(event.target.value))} /></label>
             <button type="button" onClick={() => { setYaw(24); setPitch(16); }}>Reset view</button>
           </div>
-          {!profileId ? (
-            <section className="carry-card carry-inline">
-              <h2>Choose how to enter</h2>
-              <p className="carry-lede">The web is the entrance. Look, turn it, and press a word. Shelves, adding a word, and profiles open after you choose. Your ID stays hidden unless you later decide to show it.</p>
-              {gate === "home" ? (
-                <div className="carry-stack">
-                  <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
-                  <button type="button" onClick={() => setGate("return")}>I already have an ID</button>
-                  <button type="button" onClick={() => setGate("create")}>Make a record</button>
-                </div>
-              ) : null}
-              {gate === "return" ? (
-                <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
-                  <label>Your ID<input name="id" required placeholder="U-0000" /></label>
-                  <label>Passphrase<input name="pass" type="password" required /></label>
-                  <button className="carry-primary" type="submit">Come back in</button>
-                </form>
-              ) : null}
-              {gate === "create" ? (
-                <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "create", passphrase: String(data.get("pass")) }); }}>
-                  <label>Choose a passphrase<input name="pass" type="password" minLength={4} required /></label>
-                  <button className="carry-primary" type="submit">Make my ID</button>
-                </form>
-              ) : null}
-              {gate === "made" ? (
-                <div>
-                  <p className="carry-lede">Write this down. It is how you return to your words.</p>
-                  <p className="carry-id">{madeId}</p>
-                  <button className="carry-primary" type="button" onClick={() => void refresh()}>Enter</button>
-                </div>
-              ) : null}
-              {note ? <p className="carry-bad">{note}</p> : null}
-            </section>
-          ) : null}
           <article className="carry-story">
             {chosen ? chosen.accounts.map((entry) => <Story key={entry.id} entry={entry} />) : <ProjectInfo />}
           </article>
         </main>
       ) : null}
-      {view === "shelves" ? <Shelves entries={visible} /> : null}
+      {view === "shelves" ? <Shelves entries={visible} query={query} onQuery={setQuery} /> : null}
       {view === "people" ? (
-        <People profiles={profiles} reveal={reveal} onToggle={async (next) => { await fetch("/api/atlas/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reveal: next }) }); setRevealFlag(next); await refresh(); }} />
+        <Account
+          entries={entries.filter((entry) => entry.mine)}
+          profileId={profileId}
+          reveal={reveal}
+          onToggle={async (next) => { await fetch("/api/atlas/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reveal: next }) }); setRevealFlag(next); await refresh(); }}
+          onEdit={(entry) => { setEditing(entry); setView("add"); }}
+          onLeave={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { setProfileId(null); setGate("home"); setView("web"); })}
+        />
       ) : null}
-      {view === "add" && profileId ? <Add onDone={async (id) => { await refresh(); const entry = (await (await fetch("/api/atlas/entries")).json()).entries.find((item: Entry) => item.id === id); setSelected(entry ? `${normalize(entry.expression)}|${normalize(entry.language)}` : null); setView("web"); }} /> : null}
+      {view === "add" ? <Add key={editing?.id || "new"} initial={editing} onDone={async () => { setEditing(null); await refresh(); setView("people"); }} /> : null}
     </div>
   );
 }
@@ -357,40 +373,66 @@ function Story({ entry }: { entry: Entry }) {
   );
 }
 
-function Shelves({ entries }: { entries: Entry[] }) {
+function Shelves({ entries, query, onQuery }: { entries: Entry[]; query: string; onQuery: (value: string) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const [reading, setReading] = useState<string | null>(null);
   const languages = [...new Set(entries.map((entry) => entry.language))].sort((a, b) => a.localeCompare(b, "en"));
   return (
     <main className="carry-main">
       <h2>Language shelves</h2>
-      <p className="carry-lede">Each language is a book. Open it here. The words stay on this shelf. They do not jump to the web.</p>
+      <p className="carry-lede">The books stand in alphabetical order. Open one and it lays flat so you can read it. Search stays on this shelf.</p>
+      <label className="carry-search">Search<input value={query} onChange={(event) => onQuery(event.target.value)} placeholder="Language, word or meaning" /></label>
       <div className="shelf-row">
         {languages.map((language) => {
-          const books = entries.filter((entry) => entry.language === language);
           const isOpen = open === language;
-          const page = books.find((entry) => entry.id === reading);
           return (
-            <div key={language} className={`volume${isOpen ? " open" : ""}`}>
-              <div className="book3d">
-                <button type="button" className="cover" onClick={() => { setOpen(isOpen ? null : language); setReading(null); }}>
-                  <span>{language}</span>
-                  <small>{isOpen ? "Close" : "Open"}</small>
-                </button>
-                <div className="pages">
-                  <p>{language}. {books.length} {books.length === 1 ? "word" : "words"} on this shelf.</p>
-                  {books.map((entry) => (
-                    <button key={entry.id} type="button" className={reading === entry.id ? "on" : ""} onClick={() => setReading(reading === entry.id ? null : entry.id)}>
-                      {entry.expression}
-                    </button>
-                  ))}
-                  {page ? <Story entry={page} /> : <p className="quiet-page">Open a word in the book. It stays here.</p>}
-                </div>
-              </div>
-            </div>
+            <button key={language} type="button" className={`spine${isOpen ? " on" : ""}`} onClick={() => { setOpen(isOpen ? null : language); setReading(null); }}>
+              <span>{language}</span>
+            </button>
           );
         })}
       </div>
+      {open ? (
+        <article className="spread">
+          <header>
+            <h2>{open}</h2>
+            <button type="button" onClick={() => { setOpen(null); setReading(null); }}>Close the book</button>
+          </header>
+          <div className="spread-body">
+            <nav>
+              {entries.filter((entry) => entry.language === open).sort((a, b) => a.expression.localeCompare(b.expression, "en")).map((entry) => (
+                <button key={entry.id} type="button" className={reading === entry.id ? "on" : ""} onClick={() => setReading(reading === entry.id ? null : entry.id)}>
+                  {entry.expression}
+                </button>
+              ))}
+            </nav>
+            <div>
+              {entries.find((entry) => entry.id === reading) ? <Story entry={entries.find((entry) => entry.id === reading)!} /> : <p>Choose a word. They are in alphabetical order.</p>}
+            </div>
+          </div>
+        </article>
+      ) : null}
+    </main>
+  );
+}
+
+function Account({ entries, profileId, reveal, onToggle, onEdit, onLeave }: { entries: Entry[]; profileId: string; reveal: boolean; onToggle: (next: boolean) => void; onEdit: (entry: Entry) => void; onLeave: () => void }) {
+  const mine = [...entries].sort((a, b) => a.expression.localeCompare(b.expression, "en"));
+  return (
+    <main className="carry-main">
+      <h2>Your account</h2>
+      <p className="carry-lede">{reveal ? profileId : "Your ID is hidden on the web."} You can log out, or open a word you posted and change it.</p>
+      <div className="carry-stack">
+        <label className="carry-check"><input type="checkbox" checked={reveal} onChange={(event) => onToggle(event.target.checked)} /> Show my ID</label>
+        <button type="button" onClick={onLeave}>Log out</button>
+      </div>
+      {mine.length ? mine.map((entry) => (
+        <article key={entry.id} className="carry-book">
+          <strong>{entry.expression}</strong>
+          <span>{entry.language}</span>
+          <button type="button" onClick={() => onEdit(entry)}>Edit</button>
+        </article>
+      )) : <p>You have not posted a word yet.</p>}
     </main>
   );
 }
@@ -413,9 +455,13 @@ function People({ profiles, reveal, onToggle }: { profiles: Profile[]; reveal: b
   );
 }
 
-function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
+function Add({ initial, onDone }: { initial?: Entry | null; onDone: (id: string) => Promise<void> }) {
   const [text, setText] = useState("");
-  const [picked, setPicked] = useState<Record<string, string[]>>({ emotion: [], context: [], intention: [] });
+  const [picked, setPicked] = useState<Record<string, string[]>>({
+    emotion: initial?.tags.emotion || [],
+    context: initial?.tags.context || [],
+    intention: initial?.tags.intention || [],
+  });
   const [custom, setCustom] = useState({ emotion: "", context: "", intention: "" });
   const [image, setImage] = useState<{ mime: string; data: string } | null>(null);
   const [audio, setAudio] = useState<{ mime: string; data: string } | null>(null);
@@ -439,10 +485,11 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
         const emotion = [...picked.emotion, ...custom.emotion.split(";")].filter(Boolean).join(";");
         const contextTags = [...picked.context, ...custom.context.split(";")].filter(Boolean).join(";");
         const intentionTags = [...picked.intention, ...custom.intention.split(";")].filter(Boolean).join(";");
-        const response = await fetch("/api/atlas/entries", {
+        const response = await fetch(initial ? "/api/atlas/update" : "/api/atlas/entries", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
+            id: initial?.id,
             expression: data.get("expression"),
             language: data.get("language"),
             alsoUsed: data.get("alsoUsed"),
@@ -472,32 +519,32 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
         await onDone(body.id);
       }}>
         <p className="carry-eyebrow">One language for this word</p>
-        <h2>Add what it means to you</h2>
+        <h2>{initial ? "Edit this word" : "Add what it means to you"}</h2>
         <div className="carry-two">
-          <label>Word<input name="expression" required maxLength={120} /></label>
-          <label>One language<input name="language" required maxLength={80} placeholder="The language this word belongs to" /></label>
+          <label>Word<input name="expression" required maxLength={120} defaultValue={initial?.expression || ""} /></label>
+          <label>One language<input name="language" required maxLength={80} placeholder="The language this word belongs to" defaultValue={initial?.language || ""} /></label>
         </div>
-        <label>Also used in other languages<input name="alsoUsed" placeholder="Only if you use it across others. Separate with ;" /></label>
+        <label>Also used in other languages<input name="alsoUsed" placeholder="Only if you use it across others. Separate with ;" defaultValue={initial?.alsoUsed || ""} /></label>
         <div className="carry-uploads">
           <label>Image<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={async (event) => { const file = event.target.files?.[0]; setImage(file ? await readFile(file) : null); }} /><span>Optional. Empty means no picture.</span></label>
           <label>Audio<input type="file" accept="audio/*" onChange={async (event) => { const file = event.target.files?.[0]; setAudio(file ? await readFile(file) : null); }} /><span>Optional. Empty means no player.</span></label>
           <label>Video<input type="file" accept="video/mp4,video/webm" onChange={async (event) => { const file = event.target.files?.[0]; setVideo(file ? await readFile(file) : null); }} /><span>Optional. Empty means no video.</span></label>
         </div>
-        <label>Community, if it matters<input name="community" /></label>
-        <label>What languages or ways of speaking do you use, and who do you usually use them with?<textarea name="languagePractice" /></label>
-        <label>Where does this expression come from for you?<textarea name="origin" /></label>
-        <label>In an example, what does it mean to you, and what feeling are you trying to express?<textarea name="meaning" required onChange={(event) => setText(event.target.value)} /></label>
-        <label>How would you use it? Give an example and who you would be speaking to.<textarea name="example" /></label>
-        <label>How would you explain or replace it for someone who doesn’t understand it?<textarea name="rephrasing" /></label>
-        <label>What, if anything, changes when you explain it?<textarea name="change" /></label>
-        <label>Does who you are around change whether you use it?<textarea name="withheld" /></label>
-        <label>Does changing how you speak affect how comfortable you feel being yourself?<textarea name="identity" /></label>
-        <label>When someone uses an expression you don’t know, what do you usually do?<textarea name="listenerPractice" /></label>
+        <label>Community, if it matters<input name="community" defaultValue={initial?.community || ""} /></label>
+        <label>What languages or ways of speaking do you use, and who do you usually use them with?<textarea name="languagePractice" defaultValue={initial?.languagePractice || ""} /></label>
+        <label>Where does this expression come from for you?<textarea name="origin" defaultValue={initial?.origin || ""} /></label>
+        <label>In an example, what does it mean to you, and what feeling are you trying to express?<textarea name="meaning" required defaultValue={initial?.meaning || ""} onChange={(event) => setText(event.target.value)} /></label>
+        <label>How would you use it? Give an example and who you would be speaking to.<textarea name="example" defaultValue={initial?.example || ""} /></label>
+        <label>How would you explain or replace it for someone who doesn’t understand it?<textarea name="rephrasing" defaultValue={initial?.rephrasing || ""} /></label>
+        <label>What, if anything, changes when you explain it?<textarea name="change" defaultValue={initial?.change || ""} /></label>
+        <label>Does who you are around change whether you use it?<textarea name="withheld" defaultValue={initial?.withheld || ""} /></label>
+        <label>Does changing how you speak affect how comfortable you feel being yourself?<textarea name="identity" defaultValue={initial?.identity || ""} /></label>
+        <label>When someone uses an expression you don’t know, what do you usually do?<textarea name="listenerPractice" defaultValue={initial?.listenerPractice || ""} /></label>
         <details>
           <summary>Separate a feeling, context, or intention</summary>
-          <label>Feeling<textarea name="feeling" onChange={(event) => setText((value) => `${value} ${event.target.value}`)} /></label>
-          <label>Who you use it with<textarea name="context" /></label>
-          <label>What you are trying to do<textarea name="intention" /></label>
+          <label>Feeling<textarea name="feeling" defaultValue={initial?.feeling || ""} onChange={(event) => setText((value) => `${value} ${event.target.value}`)} /></label>
+          <label>Who you use it with<textarea name="context" defaultValue={initial?.context || ""} /></label>
+          <label>What you are trying to do<textarea name="intention" defaultValue={initial?.intention || ""} /></label>
         </details>
         <p className="carry-fine">Choose a label, or add your own. Anything noticed in what you wrote is offered here. It is not applied until you choose it.</p>
         {noticed.length ? (
@@ -520,7 +567,7 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
             <label>Add to {layer}<input value={custom[layer]} placeholder="your own labels, separated by ;" onChange={(event) => setCustom((current) => ({ ...current, [layer]: event.target.value }))} /></label>
           </fieldset>
         ))}
-        <button className="carry-primary" type="submit">Place it on the web</button>
+        <button className="carry-primary" type="submit">{initial ? "Save changes" : "Place it on the web"}</button>
         {error ? <p className="carry-bad">{error}</p> : null}
       </form>
     </main>

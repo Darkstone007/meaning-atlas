@@ -381,3 +381,47 @@ export async function addEntry(profileId: string, body: Record<string, unknown>)
   `;
   return id;
 }
+
+export async function updateEntry(profileId: string, body: Record<string, unknown>) {
+  const id = String(body.id || "");
+  const expression = String(body.expression || "").trim();
+  const language = String(body.language || "").split(";")[0].trim();
+  const meaning = String(body.meaning || "").trim();
+  if (!expression || !language || !meaning) throw new Error("A word, one language, and a meaning are required.");
+  const image = takeFile(body.image, allowedImage, "image");
+  const audio = takeFile(body.audio, allowedAudio, "audio");
+  const video = takeFile(body.video, allowedVideo, "video");
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`
+    update atlas_entry set
+      expression = ${expression},
+      language = ${language},
+      community = ${String(body.community || "").trim()},
+      meaning = ${meaning},
+      example = ${String(body.example || "").trim()},
+      feeling = ${String(body.feeling || "").trim()},
+      context = ${String(body.context || "").trim()},
+      intention = ${String(body.intention || "").trim()},
+      rephrasing = ${String(body.rephrasing || "").trim()},
+      change_note = ${String(body.change || "").trim()},
+      withheld = ${String(body.withheld || "").trim()},
+      language_practice = ${String(body.languagePractice || "").trim()},
+      origin = ${String(body.origin || "").trim()},
+      identity = ${String(body.identity || "").trim()},
+      listener_practice = ${String(body.listenerPractice || "").trim()},
+      emotion = ${splitTags(String(body.emotion || "")).join(";")},
+      context_tags = ${splitTags(String(body.contextTags || "")).join(";")},
+      intention_tags = ${splitTags(String(body.intentionTags || "")).join(";")},
+      also_used = ${String(body.alsoUsed || "").trim()},
+      image_data = case when ${Boolean(image.data)} then ${image.data} else image_data end,
+      image_mime = case when ${Boolean(image.data)} then ${image.mime} else image_mime end,
+      audio_data = case when ${Boolean(audio.data)} then ${audio.data} else audio_data end,
+      audio_mime = case when ${Boolean(audio.data)} then ${audio.mime} else audio_mime end,
+      video_data = case when ${Boolean(video.data)} then ${video.data} else video_data end,
+      video_mime = case when ${Boolean(video.data)} then ${video.mime} else video_mime end
+    where id = ${id} and profile_id = ${profileId}
+    returning id
+  `;
+  if (!rows[0]) throw new Error("That word is not on your account.");
+  return rows[0].id;
+}

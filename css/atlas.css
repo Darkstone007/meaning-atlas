@@ -232,6 +232,16 @@ textarea { min-height: 96px; resize: vertical; }
 details { border-top: 1px solid var(--line); padding-top: 12px; }
 summary { cursor: pointer; color: var(--lilac); }
 [hidden] { display: none !important; }
+input[type="range"] { accent-color: #7a5a9a; }
+.shelf-row { display: flex; gap: 12px; align-items: flex-end; min-height: 210px; border-bottom: 16px solid #3a2a4a; overflow-x: auto; padding-top: 16px; }
+.spine { width: 74px; height: 200px; flex: none; border: 0; border-radius: 3px 8px 0 0; background: linear-gradient(90deg, #241828 0 10px, #5a3f72 10px); color: #f4eef8; writing-mode: vertical-rl; font-family: "Times New Roman", Times, serif; font-size: 18px; }
+.spine.on { background: linear-gradient(90deg, #241828 0 10px, #d7c6e6 10px); color: #1a1220; transform: translateY(-8px); }
+.spread { margin-top: 16px; background: #f6f1ea; color: #1c1424; padding: 22px; border-radius: 4px 16px 16px 4px; }
+.spread h2, .spread p { color: #1c1424; }
+.spread-body { display: grid; grid-template-columns: 200px 1fr; gap: 18px; }
+.spread nav button, .spread header button { background: transparent; color: #1c1424; border: 0; border-bottom: 1px solid #e4d8ea; width: 100%; text-align: left; font-family: "Times New Roman", Times, serif; font-size: 22px; }
+.spread nav button.on { background: #efe6f4; }
+.spread .pair span, .spread .pair p { color: #1c1424; }
 
 @media (max-width: 720px) {
   .card { padding: 28px 20px; }

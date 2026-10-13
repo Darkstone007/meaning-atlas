@@ -95,13 +95,17 @@ function renderHome() {
   document.getElementById("make")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
 }
 function who() {
-  document.getElementById("who").textContent = state.session ? "ID hidden" : "Choose below";
+  const inside = Boolean(state.session);
+  const welcome = document.getElementById("welcome");
+  const app = document.getElementById("app");
+  if (welcome) welcome.hidden = inside;
+  if (app) app.hidden = !inside;
+  const whoNode = document.getElementById("who");
+  if (whoNode) whoNode.textContent = inside ? "ID hidden" : "Welcome";
   const shelves = document.getElementById("nav-shelves");
   const add = document.getElementById("nav-add");
-  const enter = document.getElementById("enter");
-  if (shelves) shelves.hidden = !state.session;
-  if (add) add.hidden = !state.session;
-  if (enter) enter.hidden = Boolean(state.session);
+  if (shelves) shelves.hidden = !inside;
+  if (add) add.hidden = !inside;
 }
 function renderWeb() {
   const list = groups();
@@ -163,35 +167,40 @@ function meaningHtml(record) {
 }
 function renderShelves() {
   const host = document.getElementById("shelves");
+  const q = norm(document.getElementById("shelf-search")?.value || "");
   host.replaceChildren();
-  const intro = document.createElement("p");
-  intro.className = "lede";
-  intro.textContent = "Each language is a book. Open it here. The words stay on this shelf.";
-  host.append(intro);
+  const row = document.createElement("div");
+  row.className = "shelf-row";
   const languages = [...new Set(state.records.map((record) => record.language))].sort((a, b) => a.localeCompare(b, "en"));
   languages.forEach((language) => {
-    const words = state.records.filter((record) => record.language === language);
-    const volume = document.createElement("div");
-    volume.className = "volume" + (openBook === language ? " open" : "");
-    const cover = document.createElement("button");
-    cover.type = "button";
-    cover.className = "cover";
-    cover.innerHTML = `<span>${language}</span><small>${openBook === language ? "Close the book" : "Open the book"}</small>`;
-    cover.onclick = () => { openBook = openBook === language ? null : language; reading = null; renderShelves(); };
-    const pages = document.createElement("div");
-    pages.className = "pages";
-    pages.innerHTML = `<p>${language}. ${words.length} filed here. This does not open the word web.</p>`;
-    words.forEach((record) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = record.expression;
-      button.onclick = () => { reading = reading === record.id ? null : record.id; renderShelves(); };
-      pages.append(button);
-      if (reading === record.id) pages.insertAdjacentHTML("beforeend", meaningHtml(record));
-    });
-    volume.append(cover, pages);
-    host.append(volume);
+    const words = state.records.filter((record) => record.language === language && (!q || norm([record.expression, record.language, record.meaning].join(" ")).includes(q)));
+    if (!words.length && q && !norm(language).includes(q)) return;
+    const spine = document.createElement("button");
+    spine.type = "button";
+    spine.className = "spine" + (openBook === language ? " on" : "");
+    spine.textContent = language;
+    spine.onclick = () => { openBook = openBook === language ? null : language; reading = null; renderShelves(); };
+    row.append(spine);
   });
+  host.append(row);
+  if (!openBook) return;
+  const words = state.records.filter((record) => record.language === openBook).sort((a, b) => a.expression.localeCompare(b.expression, "en"));
+  const spread = document.createElement("article");
+  spread.className = "spread";
+  spread.innerHTML = `<header><h2>${openBook}</h2><button type="button" id="close-book">Close the book</button></header><div class="spread-body"><nav id="book-words"></nav><div id="book-page"><p>Choose a word. They are in alphabetical order.</p></div></div>`;
+  host.append(spread);
+  spread.querySelector("#close-book").onclick = () => { openBook = null; reading = null; renderShelves(); };
+  const nav = spread.querySelector("#book-words");
+  words.forEach((record) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = record.expression;
+    if (reading === record.id) button.className = "on";
+    button.onclick = () => { reading = reading === record.id ? null : record.id; renderShelves(); };
+    nav.append(button);
+  });
+  const page = words.find((record) => record.id === reading);
+  if (page) spread.querySelector("#book-page").innerHTML = meaningHtml(page);
 }
 function setupLabels() {
   const host = document.getElementById("labels");
@@ -264,13 +273,29 @@ document.querySelector("[name=meaning]").addEventListener("input", (event) => {
     host.append(button);
   });
 });
-function enterAs() {
-  state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false };
+function enterAs(id) {
+  state.session = { id: id || ("U-" + Math.random().toString(36).slice(2, 6).toUpperCase()), reveal: false };
   save();
   who();
+  show("web");
 }
-document.getElementById("guest")?.addEventListener("click", enterAs);
-document.getElementById("make")?.addEventListener("click", enterAs);
+document.getElementById("guest")?.addEventListener("click", () => enterAs());
+document.getElementById("make")?.addEventListener("click", () => {
+  const id = "U-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const known = JSON.parse(localStorage.getItem(KEY + "-ids") || "[]");
+  localStorage.setItem(KEY + "-ids", JSON.stringify([...known, id]));
+  document.getElementById("welcome-note").textContent = "Your ID is " + id + ". Write it down, then you are in.";
+  enterAs(id);
+});
+document.getElementById("show-login")?.addEventListener("click", () => { document.getElementById("login-form").hidden = false; });
+document.getElementById("login-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const id = document.getElementById("login-id").value.trim().toUpperCase();
+  const known = JSON.parse(localStorage.getItem(KEY + "-ids") || "[]");
+  if (!known.includes(id)) { document.getElementById("welcome-note").textContent = "That ID is not on this browser."; return; }
+  enterAs(id);
+});
+document.getElementById("shelf-search")?.addEventListener("input", renderShelves);
 setupLabels();
 who();
 show("web");

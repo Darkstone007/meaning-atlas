@@ -10,7 +10,24 @@
   <link rel="stylesheet" href="css/atlas.css">
 </head>
 <body>
-  <div class="app">
+  <section id="welcome" class="gate">
+    <div class="card">
+      <div class="eyebrow">Meaning Atlas</div>
+      <h1>Welcome</h1>
+      <p class="lede">Choose how you come in. A guest can look around. An ID lets you come back, see what you posted, and edit it.</p>
+      <div class="stack" id="welcome-choices">
+        <button class="btn primary" id="guest" type="button">Enter as a guest</button>
+        <button class="btn" id="show-login" type="button">Log in with an ID</button>
+        <button class="btn" id="make" type="button">Make an ID</button>
+      </div>
+      <form id="login-form" class="stack" hidden>
+        <label>Your ID<input id="login-id" placeholder="U-0000" required></label>
+        <button class="btn primary" type="submit">Log in</button>
+      </form>
+      <p class="note" id="welcome-note"></p>
+    </div>
+  </section>
+  <div class="app" id="app" hidden>
     <header class="top">
       <strong class="brand">Meaning Atlas</strong>
       <nav class="nav">
@@ -51,7 +68,10 @@
         </section>
         <article id="under"></article>
       </section>
-      <section id="view-shelves" hidden><div id="shelves" class="shelf-row"></div></section>
+      <section id="view-shelves" hidden>
+        <label class="grow">Search<input id="shelf-search" type="search" placeholder="Language, word or meaning"></label>
+        <div id="shelves"></div>
+      </section>
       <section id="view-add" hidden>
         <form id="add" class="form">
           <h2>Add what it means to you</h2>
