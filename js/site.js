@@ -13,9 +13,36 @@ Words and accounts are kept in this browser. There is no server behind the page.
 */
 
 // The browser key for the words and the current session.
-// The shared copy is the CrudCrud collection below. Every account reads and writes that, not only this browser.
 const KEY = "meaning-atlas-pages-v2";
-const CLOUD = "https://crudcrud.com/api/475a8eec30fb4daa9693e81156fe7f54";
+// The shared copy. The first store filled its 100-request limit, so a save was refused.
+// These are spare stores. A full one is skipped and the words already on this browser are sent to the next.
+const CLOUDS = [
+  "https://crudcrud.com/api/b6cddba4606b4ffdae6ce03dfd183838",
+  "https://crudcrud.com/api/5ff18a1f8d204e5cafe196d07331ef35",
+  "https://crudcrud.com/api/9cbef58dd7e543f1b4fb82dacb626fdf",
+  "https://crudcrud.com/api/a48131b5a63542bdb0392aa622a6d5cd",
+  "https://crudcrud.com/api/de955aed42144506992a78de660a651f",
+  "https://crudcrud.com/api/f674458be58e499bb93d2f50a955d89d",
+  "https://crudcrud.com/api/d7cec8eda1534f55831583a216cadc82",
+  "https://crudcrud.com/api/7ba4f6eb755f4be994b388b10549aa40",
+  "https://crudcrud.com/api/0f46025a1d3f472c897c5e55712bf6e4",
+  "https://crudcrud.com/api/11079ae18ca446e4a20b6f6da3537d1d",
+  "https://crudcrud.com/api/da548f97be1e46fc805bb6edbfcfee10",
+  "https://crudcrud.com/api/0ca625ee595740ef871a99ac90856c57",
+  "https://crudcrud.com/api/3dd6db3472eb462fbe2d7d7b9e163e2f",
+  "https://crudcrud.com/api/7c6a8038dff342b0be1f0d526d6505d8",
+  "https://crudcrud.com/api/05def5441df34a1d86d587b762cd1285",
+  "https://crudcrud.com/api/0d9db66d854f4e5faf130b70b55835dc",
+  "https://crudcrud.com/api/8c0b3360e1964ce0a7684bcdaa5228dd",
+  "https://crudcrud.com/api/9222a8c07a3c4e7196faeebf26a2e12a",
+  "https://crudcrud.com/api/59444fffc18248208022ed6522375ea1",
+  "https://crudcrud.com/api/edd3dc566f064bb8bf762c7d98d0274b",
+  "https://crudcrud.com/api/251061e1cf6b4d398b62d680f4dc5e5a",
+  "https://crudcrud.com/api/bbcdcce76315432c82649c0b1b52bdba",
+  "https://crudcrud.com/api/958e3caa194648ef993cde7f50af4298",
+  "https://crudcrud.com/api/64bbf12f22484a6ea7b9a228dca89f67",
+];
+const CLOUD_SLOT = "meaning-atlas-cloud-slot";
 // Extra survey answers for the three cleared accounts. Merged in when the page has no saved records yet.
 const MORE = {
   "acct-4f2a": {
@@ -116,60 +143,97 @@ function enqueue(job) {
   cloudChain = run.then(() => {}, () => {});
   return run;
 }
-async function cloudGet(path) {
-  const response = await fetch(CLOUD + path);
-  if (!response.ok) throw new Error("cloud " + response.status);
-  return response.json();
+function cloudRoot() {
+  const slot = Math.max(0, Math.min(CLOUDS.length - 1, Number(localStorage.getItem(CLOUD_SLOT) || "0") || 0));
+  return CLOUDS[slot];
 }
-async function cloudSend(path, method, body) {
-  const response = await fetch(CLOUD + path, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error("cloud " + response.status);
-  if (method === "POST") return response.json();
-  return null;
+function isCap(error) {
+  return /exceeded allowed number of requests/i.test(String(error && error.message || error));
+}
+function advanceCloud() {
+  const slot = Number(localStorage.getItem(CLOUD_SLOT) || "0") || 0;
+  if (slot + 1 >= CLOUDS.length) return false;
+  localStorage.setItem(CLOUD_SLOT, String(slot + 1));
+  state.records.forEach((record) => { delete record._crud; });
+  const accounts = knownIds().map((account) => { const copy = { ...account }; delete copy._crud; return copy; });
+  localStorage.setItem(KEY + "-ids", JSON.stringify(accounts));
+  return true;
+}
+async function cloudFetch(path, options) {
+  const response = await fetch(cloudRoot() + path, options);
+  const text = await response.text();
+  if (!response.ok) throw new Error(text.slice(0, 220) || ("cloud " + response.status));
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
 }
 function wordBody(record) {
   const body = { ...record, updatedAt: record.updatedAt || Date.now() };
   delete body._crud;
+  ["image", "audio", "video"].forEach((key) => { if (body[key] && String(body[key]).length > 80000) body[key] = ""; });
   return body;
 }
 async function publishWord(record) {
   record.updatedAt = Date.now();
-  const body = wordBody(record);
-  if (record._crud) {
-    const response = await fetch(CLOUD + "/words/" + record._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (response.ok) return;
-    if (response.status !== 404) throw new Error("cloud " + response.status);
-    delete record._crud;
+  let body = wordBody(record);
+  let stripped = false;
+  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
+    try {
+      if (record._crud) {
+        const response = await fetch(cloudRoot() + "/words/" + record._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (response.ok) return;
+        const text = await response.text();
+        if (response.status !== 404) throw new Error(text.slice(0, 220));
+        delete record._crud;
+      }
+      const created = await cloudFetch("/words", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!created || !created._id) throw new Error("The shared copy did not keep the word.");
+      record._crud = created._id;
+      return;
+    } catch (error) {
+      if (!stripped && /too large|entity|payload/i.test(String(error.message || error))) {
+        stripped = true;
+        body = { ...body, image: "", audio: "", video: "" };
+        continue;
+      }
+      if (isCap(error) && advanceCloud()) { delete record._crud; continue; }
+      throw error;
+    }
   }
-  const created = await cloudSend("/words", "POST", body);
-  record._crud = created._id;
+  throw new Error("The shared copy is full. Try again in a moment.");
 }
 async function publishAccount(account) {
   const body = { ...account };
   delete body._crud;
-  if (account._crud) {
-    const response = await fetch(CLOUD + "/accounts/" + account._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (response.ok) return;
-    if (response.status !== 404) throw new Error("cloud " + response.status);
-    delete account._crud;
+  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
+    try {
+      if (account._crud) {
+        const response = await fetch(cloudRoot() + "/accounts/" + account._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (response.ok) return;
+        const text = await response.text();
+        if (response.status !== 404) throw new Error(text.slice(0, 220));
+        delete account._crud;
+      }
+      const created = await cloudFetch("/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (!created || !created._id) throw new Error("The shared copy did not keep the account.");
+      account._crud = created._id;
+      const list = knownIds().map((item) => item.id === account.id ? account : item);
+      if (!list.some((item) => item.id === account.id)) list.push(account);
+      localStorage.setItem(KEY + "-ids", JSON.stringify(list));
+      return;
+    } catch (error) {
+      if (isCap(error) && advanceCloud()) { delete account._crud; continue; }
+      throw error;
+    }
   }
-  const created = await cloudSend("/accounts", "POST", body);
-  account._crud = created._id;
-  const list = knownIds().map((item) => item.id === account.id ? account : item);
-  if (!list.some((item) => item.id === account.id)) list.push(account);
-  localStorage.setItem(KEY + "-ids", JSON.stringify(list));
 }
 async function pullAccounts() {
-  const remote = await cloudGet("/accounts");
+  const remote = await cloudFetch("/accounts");
   const map = new Map(knownIds().map((item) => [item.id, item]));
-  remote.forEach((item) => {
+  (remote || []).forEach((item) => {
     const crud = item._id;
     delete item._id;
-    map.set(item.id, { ...(map.get(item.id) || {}), ...item, _crud: crud });
+    const local = map.get(item.id) || {};
+    map.set(item.id, { ...local, ...item, _crud: crud, pass: item.pass || local.pass || "" });
   });
   localStorage.setItem(KEY + "-ids", JSON.stringify([...map.values()]));
   for (const account of map.values()) {
@@ -182,27 +246,46 @@ async function publishBoard() {
   let site = {};
   try { site = JSON.parse(localStorage.getItem("meaning-atlas-site-v3") || "{}") || {}; } catch { site = {}; }
   const body = { kind: "board", labels, site, updatedAt: Date.now() };
-  const list = await cloudGet("/board");
-  if (list[0]) await cloudSend("/board/" + list[0]._id, "PUT", body);
-  else await cloudSend("/board", "POST", body);
+  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
+    try {
+      const list = await cloudFetch("/board");
+      if (list && list[0]) await cloudFetch("/board/" + list[0]._id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      else await cloudFetch("/board", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      return;
+    } catch (error) {
+      if (isCap(error) && advanceCloud()) continue;
+      throw error;
+    }
+  }
 }
 async function pullBoard() {
-  const list = await cloudGet("/board");
-  const board = list[0];
+  const list = await cloudFetch("/board");
+  const board = list && list[0];
   if (!board) return 0;
   if (board.labels) localStorage.setItem("meaning-atlas-labels", JSON.stringify(board.labels));
   if (board.site && (board.site.paragraphs || board.site.welcome)) localStorage.setItem("meaning-atlas-site-v3", JSON.stringify(board.site));
   return board.updatedAt || 0;
 }
 let lastStamp = "";
-async function refreshShared() {
-  const remote = await cloudGet("/words");
+async function refreshShared(full) {
+  const localById = new Map(state.records.map((record) => [record.id, record]));
+  let remote;
+  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
+    try { remote = await cloudFetch("/words"); break; }
+    catch (error) { if (isCap(error) && advanceCloud()) continue; throw error; }
+  }
   const drop = [];
   const byId = new Map();
-  remote.forEach((item) => {
+  (remote || []).forEach((item) => {
     const crud = item._id;
     delete item._id;
     const record = { ...item, _crud: crud };
+    const previous = localById.get(record.id);
+    if (previous) {
+      if (!record.image && previous.image) record.image = previous.image;
+      if (!record.audio && previous.audio) record.audio = previous.audio;
+      if (!record.video && previous.video) record.video = previous.video;
+    }
     const key = record.id || crud;
     const prev = byId.get(key);
     if (!prev || (record.updatedAt || 0) >= (prev.updatedAt || 0)) {
@@ -211,7 +294,7 @@ async function refreshShared() {
     } else drop.push(record);
   });
   for (const extra of drop) {
-    try { await fetch(CLOUD + "/words/" + extra._crud, { method: "DELETE" }); } catch { /* the next refresh tries again */ }
+    try { await fetch(cloudRoot() + "/words/" + extra._crud, { method: "DELETE" }); } catch { /* the next refresh tries again */ }
   }
   const pending = state.records.filter((record) => record.id && ![...byId.values()].some((item) => item.id === record.id));
   for (const record of pending) {
@@ -228,8 +311,11 @@ async function refreshShared() {
   }
   state.records = [...byId.values()];
   save();
-  await pullAccounts();
-  const boardTime = await pullBoard();
+  let boardTime = 0;
+  if (full) {
+    await pullAccounts();
+    boardTime = await pullBoard();
+  }
   const stamp = boardTime + "|" + state.records.map((record) => record.id + ":" + (record.updatedAt || 0)).sort().join("|");
   if (stamp === lastStamp) return;
   lastStamp = stamp;
@@ -237,8 +323,8 @@ async function refreshShared() {
   if (view === "shelves") renderShelves();
   if (view === "account") renderAccount();
 }
-function syncShared() {
-  return enqueue(() => refreshShared());
+function syncShared(full) {
+  return enqueue(() => refreshShared(full !== false));
 }
 // One way of comparing words: trim, collapse spaces, ignore case.
 function norm(value) { return String(value || "").normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en"); }
@@ -788,8 +874,8 @@ document.getElementById("add").onsubmit = async (event) => {
   }
   try {
     await enqueue(() => publishWord(record));
-  } catch {
-    document.getElementById("add-note").textContent = "This word was not saved for the other accounts. Nothing was changed. Try again.";
+  } catch (error) {
+    document.getElementById("add-note").textContent = "This word was not saved for the other accounts. Nothing was changed. " + String(error && error.message || "Try again.").replace(/\s+/g, " ").slice(0, 180);
     return;
   }
   if (editingId) {
@@ -1144,7 +1230,7 @@ const opening = document.querySelector("#welcome .lede");
 if (opening) opening.textContent = siteCopy().welcome;
 who();
 show("web");
-syncShared().catch(() => {});
-setInterval(() => { syncShared().catch(() => {}); }, 12000);
-window.addEventListener("focus", () => { syncShared().catch(() => {}); });
+syncShared(true).catch(() => {});
+setInterval(() => { if (document.visibilityState === "visible") syncShared(false).catch(() => {}); }, 90000);
+window.addEventListener("focus", () => { syncShared(false).catch(() => {}); });
 window.addEventListener("resize", () => { if (view === "web") renderWeb(); });
