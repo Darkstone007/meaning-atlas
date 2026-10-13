@@ -108,8 +108,29 @@ function show(name) {
   if (name === "account") renderAccount();
 }
 function projectHtml() {
-  const text = currentCopy();
+  const text = siteCopy();
   return `<p class="eyebrow">Meaning Atlas</p><h2>${esc(text.title || "What this is")}</h2>${(text.paragraphs || []).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}`;
+}
+const HOW = [
+  "Enter the site. Explore as a guest, or make a record and return with that ID.",
+  "Choose a word on the map.",
+  "Read the account beside it. Meaning, example, emotion, context, and intention are separate.",
+  "Click a dashed line, or use the connection list. It names the two words and the shared label. A shared label is not the same meaning.",
+  "Search for a word, language, or meaning. Clear the search to return to the wider map.",
+  "Open Shelves to read the words by language.",
+  "Add a word when you want to. It does not need to be a dictionary definition.",
+  "Open Your words to find what this record posted.",
+];
+function siteCopy() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("meaning-atlas-site-v3") || "{}") || {}; } catch { saved = {}; }
+  const base = currentCopy();
+  return {
+    welcome: saved.welcome || "Choose a word to discover what it means to someone. You do not need to understand the language.",
+    title: saved.title || base.title,
+    paragraphs: saved.paragraphs && saved.paragraphs.length ? saved.paragraphs : base.paragraphs,
+    how: saved.how && saved.how.length ? saved.how : HOW,
+  };
 }
 function renderHome() {
   const box = document.getElementById("view-home");
@@ -134,18 +155,28 @@ function who() {
 }
 function separate(nodes) {
   const stage = document.getElementById("stage");
-  const pad = 78;
-  for (let pass = 0; pass < 14; pass++) {
+  const pad = 120;
+  for (let pass = 0; pass < 28; pass++) {
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         let dx = nodes[j].x - nodes[i].x;
         let dy = nodes[j].y - nodes[i].y;
-        const dist = Math.hypot(dx, dy) || 1;
-        if (dist < 158) {
-          const push = (158 - dist) / 2;
-          dx /= dist; dy /= dist;
-          nodes[i].x -= dx * push; nodes[i].y -= dy * push;
-          nodes[j].x += dx * push; nodes[j].y += dy * push;
+        const iw = Math.min(240, 40 + nodes[i].expression.length * 7.2);
+        const jw = Math.min(240, 40 + nodes[j].expression.length * 7.2);
+        const overlapX = (iw + jw) / 2 + 18 - Math.abs(dx);
+        const overlapY = 58 - Math.abs(dy);
+        if (overlapX > 0 && overlapY > 0) {
+          if (overlapX <= overlapY) {
+            const push = overlapX / 2 + 1;
+            const sign = dx < 0 ? -1 : 1;
+            nodes[i].x -= sign * push;
+            nodes[j].x += sign * push;
+          } else {
+            const push = overlapY / 2 + 1;
+            const sign = dy < 0 ? -1 : 1;
+            nodes[i].y -= sign * push;
+            nodes[j].y += sign * push;
+          }
         }
       }
     }
@@ -183,22 +214,32 @@ function renderWeb() {
     for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
       const tags = sharedTags(nodes[i], nodes[j], layer);
       if (!tags.length) continue;
-      const line = document.createElementNS(svg.namespaceURI, "line");
-      line.setAttribute("x1", nodes[i].x); line.setAttribute("y1", nodes[i].y); line.setAttribute("x2", nodes[j].x); line.setAttribute("y2", nodes[j].y);
-      const on = selectedLine && selectedLine.a === nodes[i].key && selectedLine.b === nodes[j].key;
-      line.setAttribute("stroke", on ? "#c6b08a" : "#d7c6e6");
-      line.setAttribute("stroke-width", on ? "3" : "1.5");
-      line.setAttribute("stroke-dasharray", "5 6");
-      line.style.pointerEvents = "stroke";
-      line.style.cursor = "pointer";
-      line.onclick = (event) => {
+      const on = selectedLine && selectedLine.layer === layer && selectedLine.a === nodes[i].key && selectedLine.b === nodes[j].key;
+      const open = (event) => {
         event.stopPropagation();
         selected = null;
         panelMode = "line";
         selectedLine = { a: nodes[i].key, b: nodes[j].key, from: nodes[i].expression, to: nodes[j].expression, tags, layer };
         renderWeb();
       };
-      svg.append(line);
+      const hit = document.createElementNS(svg.namespaceURI, "line");
+      ["x1", "y1", "x2", "y2"].forEach((name, index) => hit.setAttribute(name, [nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y][index]));
+      hit.setAttribute("stroke", "transparent");
+      hit.setAttribute("stroke-width", "24");
+      hit.style.pointerEvents = "stroke";
+      hit.style.cursor = "pointer";
+      hit.setAttribute("role", "button");
+      hit.setAttribute("tabindex", "0");
+      hit.setAttribute("aria-label", `${nodes[i].expression} and ${nodes[j].expression}. Shared ${layer} label: ${tags.join(", ")}`);
+      hit.onclick = open;
+      hit.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(event); } };
+      const line = document.createElementNS(svg.namespaceURI, "line");
+      line.setAttribute("x1", nodes[i].x); line.setAttribute("y1", nodes[i].y); line.setAttribute("x2", nodes[j].x); line.setAttribute("y2", nodes[j].y);
+      line.setAttribute("stroke", on ? "#c6b08a" : "#d7c6e6");
+      line.setAttribute("stroke-width", on ? "3" : "1.5");
+      line.setAttribute("stroke-dasharray", "5 6");
+      line.style.pointerEvents = "none";
+      svg.append(hit, line);
     }
   }
   stage.append(svg);
@@ -215,6 +256,26 @@ function renderWeb() {
     stage.append(button);
   });
   renderPanel(nodes);
+  const links = document.getElementById("links");
+  if (links) {
+    links.replaceChildren();
+    if (layer === "none") return;
+    for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+      const tags = sharedTags(nodes[i], nodes[j], layer);
+      if (!tags.length) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn";
+      button.textContent = `${nodes[i].expression} ↔ ${nodes[j].expression} · ${tags.join(", ")}`;
+      button.onclick = () => {
+        selected = null;
+        panelMode = "line";
+        selectedLine = { a: nodes[i].key, b: nodes[j].key, from: nodes[i].expression, to: nodes[j].expression, tags, layer };
+        renderWeb();
+      };
+      links.append(button);
+    }
+  }
 }
 function renderPanel(nodes) {
   const panel = document.getElementById("panel");
@@ -222,18 +283,21 @@ function renderPanel(nodes) {
   const chosen = (nodes || []).find((node) => node.key === selected);
   if (panelMode === "about") { panel.innerHTML = `<article class="story">${projectHtml()}<button type="button" class="btn" id="back-start">Back</button></article>`; document.getElementById("back-start").onclick = () => { panelMode = "start"; renderWeb(); }; return; }
   if (panelMode === "how") {
-    panel.innerHTML = `<article class="story"><h2>How to explore</h2><ol class="steps"><li>Enter the site. Explore as a guest, or make a record and return with that ID.</li><li>Choose a word on the map.</li><li>Read the account beside it: meaning, feeling, context, intention, and what changes.</li><li>Click a dashed line to see the shared label. The layer chooses which kind of label. A shared label does not mean the experiences are the same.</li><li>Search for a word, language, or meaning. Clear the search to return to the wider map.</li><li>Open Shelves to read the words by language.</li><li>Add a word when you want to. It does not need to be a dictionary definition.</li><li>Open Your words to find what this record posted.</li></ol><button type="button" class="btn" id="back-start">Back</button></article>`;
+    const steps = siteCopy().how.map((step) => `<li>${esc(step)}</li>`).join("");
+    panel.innerHTML = `<article class="story"><h2>How to explore</h2><ol class="steps">${steps}</ol><button type="button" class="btn" id="back-start">Back</button></article>`;
     document.getElementById("back-start").onclick = () => { panelMode = "start"; renderWeb(); };
     return;
   }
   if (selectedLine && panelMode === "line") {
     const layerName = { emotion: "Emotion", context: "Context", intention: "Intention" }[selectedLine.layer] || selectedLine.layer;
     panel.innerHTML = `<article class="story"><h2>This connection</h2>
-      <div class="bit"><h4>Words</h4><p>${esc(selectedLine.from)} and ${esc(selectedLine.to)}</p></div>
-      <div class="bit"><h4>What connects them</h4><p>${selectedLine.tags.map(esc).join(", ")}</p></div>
-      <div class="bit"><h4>Kind</h4><p>${esc(layerName)}. A shared label does not mean the experiences are the same.</p></div>
+      <p class="link-words"><button type="button" data-word="${esc(selectedLine.a)}">${esc(selectedLine.from)}</button> ↔ <button type="button" data-word="${esc(selectedLine.b)}">${esc(selectedLine.to)}</button></p>
+      <div class="bit"><h4>${esc(layerName)}</h4><p>Shared label: ${selectedLine.tags.map(esc).join(", ")}. This is a shared label, not the same meaning.</p></div>
       <button type="button" class="btn" id="close-line">Close connection</button></article>`;
     document.getElementById("close-line").onclick = () => { selectedLine = null; panelMode = "start"; renderWeb(); };
+    panel.querySelectorAll("[data-word]").forEach((button) => {
+      button.onclick = () => { selected = button.dataset.word; selectedLine = null; panelMode = "word"; renderWeb(); };
+    });
     return;
   }
   if (!chosen) {
@@ -243,8 +307,7 @@ function renderPanel(nodes) {
     return;
   }
   const jumps = chosen.accounts.map((record, index) => {
-    const who = record.reveal && record.userId ? ` · ${esc(record.userId)}` : "";
-    return `<button type="button" data-jump="acct-${record.id}">Account ${index + 1}${who}</button>`;
+    return `<button type="button" data-jump="acct-${record.id}">${esc(accountName(record, index + 1))}</button>`;
   }).join("");
   panel.innerHTML = `<article class="story"><div id="account-top"><p class="legend">${esc(chosen.language)}</p><h2>${esc(chosen.expression)}</h2><nav class="account-jump">${jumps}</nav><button type="button" class="btn" id="close-account">Close</button></div>${chosen.accounts.map((record, index) => meaningHtml(record, index + 1)).join("")}</article>`;
   document.getElementById("close-account").onclick = () => { selected = null; panelMode = "start"; renderWeb(); };
@@ -255,6 +318,9 @@ function renderPanel(nodes) {
     button.onclick = () => document.getElementById("account-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
+function accountName(record, number) {
+  return record.reveal && record.userId ? `Account ${number} · User ID ${record.userId}` : `Account ${number}`;
+}
 function youtubeId(url) {
   const match = String(url || "").match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,})/);
   return match ? match[1] : "";
@@ -264,13 +330,12 @@ function bit(title, text) {
   return `<div class="bit"><h4>${esc(title)}</h4><p>${esc(text)}</p></div>`;
 }
 function meaningHtml(record, number) {
-  const who = record.reveal && record.userId ? ` · ${esc(record.userId)}` : "";
   const badge = record.source === "example" ? `<span class="badge">Illustrative example</span>` : "";
   const video = youtubeId(record.youtube);
   const media = `${record.image ? `<img alt="" src="${record.image}">` : ""}${record.audio ? `<audio controls src="${record.audio}"></audio>` : ""}${record.video ? `<video controls src="${record.video}"></video>` : ""}${video ? `<div class="video-frame"><iframe src="https://www.youtube-nocookie.com/embed/${video}" title="Playback" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>` : ""}`;
   return `<section class="account" id="acct-${record.id}">
     <button type="button" class="btn back-top" data-top="1">Back to accounts</button>
-    <h3>Account ${number || 1}${who}</h3>${badge}
+    <h3>${esc(accountName(record, number || 1))}</h3>${badge}
     ${bit("Meaning", record.meaning)}
     ${bit("Example", record.example)}
     ${bit("Emotion", record.feeling)}
@@ -368,7 +433,11 @@ function setupLabels() {
 }
 document.querySelectorAll("[data-view]").forEach((button) => { button.onclick = () => show(button.dataset.view); });
 document.getElementById("search").addEventListener("input", renderWeb);
-document.getElementById("layer").addEventListener("change", renderWeb);
+document.getElementById("layer").addEventListener("change", () => {
+  selectedLine = null;
+  if (panelMode === "line") panelMode = "start";
+  renderWeb();
+});
 document.getElementById("reset-view").onclick = () => { yaw = 24; pitch = 16; document.getElementById("yaw").value = 24; document.getElementById("pitch").value = 16; renderWeb(); };
 document.getElementById("yaw").oninput = (event) => { yaw = Number(event.target.value); renderWeb(); };
 document.getElementById("pitch").oninput = (event) => { pitch = Number(event.target.value); renderWeb(); };
@@ -380,6 +449,12 @@ document.getElementById("add").onsubmit = async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   if (!state.session) { document.getElementById("add-note").textContent = "Come in from the home page first."; return; }
+  ["meaning", "example", "emotion", "context", "intention"].forEach((name) => {
+    const error = document.querySelector(`[data-for="${name}"]`);
+    const missing = !form[name].value.trim();
+    if (error) error.textContent = missing ? "This is required." : "";
+    form[name].setAttribute("aria-invalid", missing ? "true" : "false");
+  });
   if (!form.example.value.trim() || !form.emotion.value.trim() || !form.context.value.trim() || !form.intention.value.trim()) {
     document.getElementById("add-note").textContent = "An example, an emotion, a context, and an intention are required.";
     return;
@@ -395,7 +470,7 @@ document.getElementById("add").onsubmit = async (event) => {
   }
   const tooBig = [...form.querySelectorAll("input[type=file]")].find((input) => input.files[0] && input.files[0].size > 1_500_000);
   if (tooBig) {
-    document.getElementById("add-note").textContent = "That file is larger than the maximum of 1.5 MB. Send it to the owner. They can give you a private YouTube link to paste in the form.";
+    document.getElementById("add-note").textContent = "That file is larger than the maximum of 1.5 MB, so it was not added. The rest of the form is still here. Send the file to the owner, or paste an unlisted YouTube link.";
     return;
   }
   const file = async (input) => input.files[0] ? await new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(input.files[0]); }) : "";
@@ -516,15 +591,54 @@ function freshId() {
 function openOwner() {
   sessionStorage.setItem("atlas-owner", "1");
   sessionStorage.removeItem("atlas-open");
-  const text = currentCopy();
+  const text = siteCopy();
+  document.getElementById("copy-welcome").value = text.welcome;
   document.getElementById("copy-title").value = text.title || "";
   document.getElementById("copy-body").value = (text.paragraphs || []).join("\n\n");
+  document.getElementById("copy-how").value = (text.how || []).join("\n");
+  const host = document.getElementById("owner-words");
+  host.replaceChildren();
+  state.records.forEach((record) => {
+    const form = document.createElement("form");
+    form.className = "owner-word stack";
+    const title = document.createElement("h3");
+    title.textContent = `${record.expression} · ${record.language}`;
+    form.append(title);
+    [["expression", "Word", record.expression], ["meaning", "Meaning", record.meaning], ["example", "Example", record.example], ["emotion", "Emotion", record.feeling], ["context", "Context", record.context], ["intention", "Intention", record.intention], ["youtube", "Unlisted YouTube link", record.youtube || ""]].forEach(([name, label, value]) => {
+      const wrap = document.createElement("label");
+      wrap.textContent = label;
+      const field = document.createElement(name === "expression" || name === "youtube" ? "input" : "textarea");
+      field.name = name;
+      field.value = value || "";
+      wrap.append(field);
+      form.append(wrap);
+    });
+    const button = document.createElement("button");
+    button.className = "btn";
+    button.type = "submit";
+    button.textContent = "Save this account";
+    form.append(button);
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      record.expression = form.expression.value.trim() || record.expression;
+      record.meaning = form.meaning.value.trim();
+      record.example = form.example.value.trim();
+      record.feeling = form.emotion.value.trim();
+      record.context = form.context.value.trim();
+      record.intention = form.intention.value.trim();
+      record.youtube = form.youtube.value.trim();
+      save();
+      title.textContent = `${record.expression} · ${record.language}`;
+      document.getElementById("owner-note").textContent = "Saved " + record.expression + " on this browser.";
+    };
+    host.append(form);
+  });
   who();
 }
 document.getElementById("guest")?.addEventListener("click", () => enterAs("guest"));
 document.getElementById("make")?.addEventListener("click", async () => {
   const pass = document.getElementById("login-pass").value;
-  if (pass.length < 4) { document.getElementById("welcome-note").textContent = "Type a passphrase of at least 4 characters, then make an ID."; return; }
+  if (pass.length < 8) { document.getElementById("welcome-note").textContent = "Use a passphrase of at least 8 characters, then make an ID."; return; }
   const id = freshId();
   const list = knownIds();
   list.push({ id, pass: await sha(pass) });
@@ -547,9 +661,16 @@ document.getElementById("logout")?.addEventListener("click", () => {
 });
 document.getElementById("owner-edit")?.addEventListener("submit", (event) => {
   event.preventDefault();
-  const next = { title: document.getElementById("copy-title").value.trim() || "What this is", paragraphs: document.getElementById("copy-body").value.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean) };
-  localStorage.setItem("meaning-atlas-copy-v2", JSON.stringify(next));
-  document.getElementById("owner-note").textContent = "Saved on this browser.";
+  const next = {
+    welcome: document.getElementById("copy-welcome").value.trim(),
+    title: document.getElementById("copy-title").value.trim() || "What this is",
+    paragraphs: document.getElementById("copy-body").value.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean),
+    how: document.getElementById("copy-how").value.split("\n").map((item) => item.trim()).filter(Boolean),
+  };
+  localStorage.setItem("meaning-atlas-site-v3", JSON.stringify(next));
+  const lede = document.querySelector("#welcome .lede");
+  if (lede && next.welcome) lede.textContent = next.welcome;
+  document.getElementById("owner-note").textContent = "The site text is saved on this browser.";
 });
 document.getElementById("owner-leave")?.addEventListener("click", () => {
   sessionStorage.removeItem("atlas-owner");
@@ -566,10 +687,14 @@ document.querySelectorAll("#add input[type=file]").forEach((input) => {
     host.querySelector(`[data-file="${name}"]`)?.remove();
     const file = input.files[0];
     if (!file) return;
-    if (file.size > 1_500_000) { input.value = ""; document.getElementById("add-note").textContent = "That file is larger than the maximum of 1.5 MB. Send it to the owner. They can give you a private YouTube link. Paste that link in the form and it will play on the account."; return; }
+    if (file.size > 1_500_000) {
+      input.value = "";
+      document.getElementById("add-note").textContent = `${file.name} is ${(file.size / 1_000_000).toFixed(1)} MB. The maximum is 1.5 MB, so it was not added. The rest of the form is still here. Send the file to the owner, or paste an unlisted YouTube link.`;
+      return;
+    }
     const box = document.createElement("p");
     box.dataset.file = name;
-    box.textContent = `${name}: ${file.name}`;
+    box.textContent = `${name}: ${file.name} · ${(file.size / 1_000_000).toFixed(2)} MB`;
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "btn";
@@ -581,6 +706,8 @@ document.querySelectorAll("#add input[type=file]").forEach((input) => {
 });
 document.getElementById("shelf-search")?.addEventListener("input", renderShelves);
 setupLabels();
+const opening = document.querySelector("#welcome .lede");
+if (opening) opening.textContent = siteCopy().welcome;
 who();
 show("web");
 window.addEventListener("resize", () => { if (view === "web") renderWeb(); });
