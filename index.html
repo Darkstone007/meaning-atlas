@@ -1,4 +1,11 @@
 <!doctype html>
+<!--
+  Meaning Atlas page structure.
+  These comments are not shown on the site.
+  welcome: guest, login, or make an ID.
+  app: the map, shelves, add-a-word, and your words. The account page opens from the top-right control.
+  owner-page: not linked. It opens only after the owner logs in.
+-->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -10,6 +17,7 @@
   <link rel="stylesheet" href="css/atlas.css?v=20261013i">
 </head>
 <body>
+  <!-- Entrance. Explore as a guest is the main action. Make an ID gives one code, and that code is the passphrase until they change it. -->
   <section id="welcome" class="gate">
     <div class="card">
       <div class="eyebrow">Meaning Atlas</div>
@@ -25,6 +33,7 @@
       <p class="note" id="welcome-note"></p>
     </div>
   </section>
+  <!-- The site after they come in. The top-right button says ID hidden and opens the account page. It does not print the ID here. -->
   <div class="app" id="app" hidden>
     <header class="top">
       <strong class="brand">Meaning Atlas</strong>
@@ -38,6 +47,7 @@
     </header>
     <main class="workspace">
       <section id="view-home"></section>
+      <!-- Words only. Search, the similarity layer, the map, and the reading column. -->
       <section id="view-web" hidden>
         <div class="tools">
           <label class="grow">Search<input id="search" type="search" placeholder="Word, language or meaning"></label>
@@ -65,10 +75,12 @@
           <aside id="panel" class="panel-card"></aside>
         </div>
       </section>
+      <!-- One book per language. The words inside a book are alphabetical. -->
       <section id="view-shelves" hidden>
         <label class="grow">Search<input id="shelf-search" type="search" placeholder="Language, word or meaning"></label>
         <div id="shelves"></div>
       </section>
+      <!-- Words this ID posted. Similar words appear here only if they turned that on in the account. -->
       <section id="view-account" hidden>
         <h2>Your words</h2>
         <p class="lede">The words you posted. Edit one, or log out and return to the login page.</p>
@@ -76,11 +88,13 @@
         <div id="similar"></div>
         <div id="mine"></div>
       </section>
+      <!-- Separate from Your words. The ID is shown on this page, not on the map. -->
       <section id="view-profile" hidden>
         <h2>Your account</h2>
         <p class="lede">This page is only for you. It is separate from Your words, and none of it is placed on the map.</p>
         <div id="profile"></div>
       </section>
+      <!-- A guest is stopped above the form and asked to make an ID. -->
       <section id="view-add" hidden>
         <div id="guest-gate" hidden>
           <h2>Make an ID first</h2>
@@ -139,6 +153,7 @@
       </section>
     </main>
   </div>
+  <!-- Owner only. Entrance text, the project text, the how-to steps, and every account. Not linked from the public pages. -->
   <section id="owner-page" class="gate owner-screen" hidden>
     <div class="owner-board">
       <div class="eyebrow">Owner</div>

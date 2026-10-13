@@ -1,3 +1,11 @@
+/*
+  Meaning Atlas styles.
+  These comments are not shown on the site.
+  Dark field, lilac and gold, Times New Roman.
+  The map is on the left. The reading column is beside it.
+  A shelf opens into a light book so the words can be read.
+*/
+
 :root {
   --ink: #0c0b0e;
   --panel: #17141d;
@@ -23,6 +31,7 @@ button { cursor: pointer; }
 button:disabled { opacity: 0.45; cursor: default; }
 a { color: var(--lilac); }
 
+/* Entrance card and the owner page, before the map is shown. */
 .gate {
   min-height: 100vh;
   display: grid;
@@ -82,6 +91,7 @@ textarea { min-height: 96px; resize: vertical; }
 .note.bad { color: var(--danger); }
 
 .app { min-height: 100vh; }
+/* Top bar. The ID control is a button, but it still looks like a small pill. */
 .top {
   display: flex;
   justify-content: space-between;
@@ -273,6 +283,7 @@ summary { cursor: pointer; color: var(--lilac); }
 [hidden] { display: none !important; }
 input[type="range"] { accent-color: #7a5a9a; }
 .shelf-row { display: flex; gap: 12px; align-items: flex-end; min-height: 210px; border-bottom: 16px solid #3a2a4a; overflow-x: auto; padding-top: 16px; }
+/* A language book. The open page is light so the writing can be read. */
 .spine { width: 74px; height: 200px; flex: none; border: 0; border-radius: 3px 8px 0 0; background: linear-gradient(90deg, #241828 0 10px, #5a3f72 10px); color: #f4eef8; writing-mode: vertical-rl; font-family: "Times New Roman", Times, serif; font-size: 18px; }
 .spine.on { background: linear-gradient(90deg, #241828 0 10px, #d7c6e6 10px); color: #1a1220; transform: translateY(-8px); }
 .spread { margin-top: 16px; background: #f6f1ea; color: #1c1424; padding: 22px; border-radius: 4px 16px 16px 4px; }

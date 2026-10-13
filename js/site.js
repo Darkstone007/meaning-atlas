@@ -1,4 +1,20 @@
+/*
+Meaning Atlas. This file is the behaviour of the public page.
+These comments are for reading the code. They are not shown on the site.
+
+What lives here:
+- the word map, and the lines between words
+- the language shelves
+- the form for adding a word
+- Your words, and the separate account page
+- the owner page, which is not linked from the site
+
+Words and accounts are kept in this browser. There is no server behind the page.
+*/
+
+// The browser key for the words and the current session.
 const KEY = "meaning-atlas-pages-v2";
+// Extra survey answers for the three cleared accounts. Merged in when the page has no saved records yet.
 const MORE = {
   "acct-4f2a": {
     languagePractice: "French and Wolof with some friends and family. English with friends.",
@@ -18,11 +34,14 @@ const MORE = {
     also: "Serbian; Bosnian",
   },
 };
+// The starting labels. Emotion, context, and intention are separate.
+// A label someone adds later is stored on top of this list, not written into it.
 const VOCAB = {
   emotion: ["care", "affection", "joy", "longing", "pride", "frustration", "mixed"],
   context: ["friends", "family", "home", "work", "celebration", "greeting"],
   intention: ["comfort", "approval", "belonging", "humour", "address", "disagreement"],
 };
+// If the meaning they type contains one of these words, I offer that label. They still have to tick it.
 const HINTS = [
   ["emotion", "care", ["care", "pain", "hurt", "sorry", "shame"]],
   ["emotion", "joy", ["lekker", "tasty", "nice", "good"]],
@@ -32,6 +51,11 @@ const HINTS = [
   ["intention", "comfort", ["comfort", "sorry", "shame"]],
   ["intention", "approval", ["lekker", "deal", "good"]],
 ];
+// What is on screen right now.
+// state holds the records and who is logged in.
+// selected is the word they opened. selectedLine is the dashed line they opened.
+// panelMode is start, word, line, about, or how.
+// yaw and pitch are the map rotation. drag is the mouse while they are turning it.
 let state = load();
 let view = "home";
 let selected = null;
@@ -44,7 +68,9 @@ let pitch = 16;
 let drag = null;
 let openBook = null;
 let reading = null;
+// Kept so an older check still has a place. The owner page opens from the login, not from a public button.
 const OWNER_HASH = "a3b39f5277df6de836221ba3271b8f265f1810fdf9f48f98e402f0c724809c7d";
+// The project text, used until the owner saves a different version in this browser.
 let copy = {
   title: "What this is",
   paragraphs: [
@@ -52,14 +78,18 @@ let copy = {
     "With the wider project, I want to explore what we miss when we translate a word without understanding the person or context behind it. Meaning Atlas would become an interactive installation where people can explore these accounts and contribute their own. I am considering a projected map alongside VR, where others can see an avatar interacting with the nodes, and a possible floor projection that visitors can explore separately. People would also be able to scan a QR code and add words through their phones. The aim is to let people find connections across their experiences while leaving room for meanings that are different or difficult to explain.",
   ],
 };
+// Set when someone edits one of their own words, so save updates that record instead of adding a new one.
 let editingId = null;
+// Put text on the page without letting it become HTML.
 function esc(value) {
   return String(value || "").replace(/&/g, "\u0026amp;").replace(/</g, "\u0026lt;").replace(/>/g, "\u0026gt;");
 }
+// Hash a passphrase before it is stored. The passphrase itself is not kept.
 async function sha(text) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+// Older saved project text, if this browser still has it.
 function currentCopy() {
   try {
     const saved = JSON.parse(localStorage.getItem("meaning-atlas-copy-v2") || "null");
@@ -68,6 +98,7 @@ function currentCopy() {
   return copy;
 }
 
+// Read the saved words. If this browser has none, start from the five records in data.js.
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "null");
@@ -75,8 +106,11 @@ function load() {
   } catch { /* fresh */ }
   return { session: null, records: SEED.map((record) => ({ ...(MORE[record.id] || {}), ...record, also: record.also || (MORE[record.id] && MORE[record.id].also) || "", image: record.image || "", audio: record.audio || "", video: "" })) };
 }
+// Write the words and the session back to this browser.
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+// One way of comparing words: trim, collapse spaces, ignore case.
 function norm(value) { return String(value || "").normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en"); }
+// Turn a 3D point into a place on the map. yaw spins it. pitch tilts it.
 function project(p) {
   const yr = yaw * Math.PI / 180, pr = pitch * Math.PI / 180;
   const x1 = p[0] * Math.cos(yr) + p[2] * Math.sin(yr);
@@ -84,9 +118,14 @@ function project(p) {
   const y1 = p[1] * Math.cos(pr) - z1 * Math.sin(pr);
   const z2 = p[1] * Math.sin(pr) + z1 * Math.cos(pr);
   const depth = 680 / (680 - z2);
-  const stage = document.getElementById("stage");
+  // Map drag, the similarity layer, and the add-word form.
+// A guest cannot submit a word. Emotion, context, and intention each need writing and at least one label.
+// A file over 1.5 MB is refused and the rest of the form is left as they typed it.
+const stage = document.getElementById("stage");
   return [stage.clientWidth / 2 + x1 * depth, stage.clientHeight / 2 + y1 * depth];
 }
+// One node per word plus language. Search has to match every word they typed.
+// Two Massa accounts stay on one node because the word and the language are the same.
 function groups() {
   const q = norm(document.getElementById("search")?.value || "");
   const terms = q.split(" ").filter(Boolean);
@@ -98,6 +137,7 @@ function groups() {
   });
   return [...map.entries()].map(([key, accounts]) => ({ key, expression: accounts[0].expression, language: accounts[0].language, accounts }));
 }
+// Switch the visible page. A guest who opens Add a word sees Make an ID instead of the form.
 function show(name) {
   view = name;
   ["home", "web", "shelves", "add", "account", "profile"].forEach((item) => {
@@ -117,10 +157,12 @@ function show(name) {
   }
   if (name === "profile") renderProfile();
 }
+// The "What this is" text, from the owner's saved copy if there is one.
 function projectHtml() {
   const text = siteCopy();
   return `<p class="eyebrow">Meaning Atlas</p><h2>${esc(text.title || "What this is")}</h2>${(text.paragraphs || []).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}`;
 }
+// The steps under How to explore, unless the owner has replaced them.
 const HOW = [
   "Enter the site. Explore as a guest, or make a record and return with that ID.",
   "Choose a word on the map.",
@@ -131,6 +173,7 @@ const HOW = [
   "Add a word when you want to. It does not need to be a dictionary definition.",
   "Open Your words to find what this record posted.",
 ];
+// Entrance line, project text, and the how-to steps. Owner edits win over the defaults.
 function siteCopy() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem("meaning-atlas-site-v3") || "{}") || {}; } catch { saved = {}; }
@@ -142,15 +185,20 @@ function siteCopy() {
     how: saved.how && saved.how.length ? saved.how : HOW,
   };
 }
+// Older home block. The entrance people see now is the welcome section in index.html.
 function renderHome() {
   const box = document.getElementById("view-home");
   box.innerHTML = `<article class="story">${projectHtml()}</article>
     <div class="card" style="margin-top:24px"><h2>Keep a record</h2><p class="lede">Browsing needs no ID. An ID only keeps the words you add, and it stays hidden.</p>
     ${state.session ? `<p>You are in. Your ID stays hidden on the web.</p>` : `<div class="stack"><button class="btn primary" id="guest" type="button">Enter as a guest</button><button class="btn" id="make" type="button">Make a record</button></div>`}
     </div>`;
-  document.getElementById("guest")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
+  // Entrance buttons, login, logout, owner text, search, and file size.
+// Login with the owner ID opens the owner page. Every other ID is a normal account.
+document.getElementById("guest")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
   document.getElementById("make")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
 }
+// Show the entrance, the site, or the owner page.
+// The top-right control says Guest or "ID hidden". It does not print the ID on the map.
 function who() {
   const owner = sessionStorage.getItem("atlas-owner") === "1";
   const inside = sessionStorage.getItem("atlas-open") === "1" && !owner;
@@ -163,6 +211,8 @@ function who() {
   const whoNode = document.getElementById("who");
   if (whoNode) whoNode.textContent = state.session?.id === "guest" ? "Guest" : "ID hidden";
 }
+// Push word labels apart so a long word does not sit on top of another.
+// The gap depends on how wide the label is, then the labels are kept inside the map.
 function separate(nodes) {
   const stage = document.getElementById("stage");
   const pad = 120;
@@ -196,10 +246,14 @@ function separate(nodes) {
     node.y = Math.max(46, Math.min(stage.clientHeight - 46, node.y));
   });
 }
+// Labels both words were given on the current layer. No shared label means no line.
 function sharedTags(left, right, layer) {
   const have = new Set(left.accounts.flatMap((record) => record.tags?.[layer] || []));
   return [...new Set(right.accounts.flatMap((record) => record.tags?.[layer] || []))].filter((tag) => have.has(tag));
 }
+// Draw the map. Words only. A dashed line is a shared label on the selected layer.
+// The visible line stays thin. A wider invisible line sits on it so it can be clicked.
+// Changing the layer clears a connection that belonged to the previous layer.
 function renderWeb() {
   const list = groups();
   const stage = document.getElementById("stage");
@@ -287,6 +341,10 @@ function renderWeb() {
     }
   }
 }
+// The reading column beside the map.
+// Nothing selected: a short prompt, plus What this is and How to explore.
+// A word: account buttons at the top, then each account.
+// A line: the two words, the layer, and the shared label.
 function renderPanel(nodes) {
   const panel = document.getElementById("panel");
   if (!panel) return;
@@ -328,17 +386,22 @@ function renderPanel(nodes) {
     button.onclick = () => document.getElementById("account-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
+// "Account 1" unless that person allowed their ID to be shown.
 function accountName(record, number) {
   return record.reveal && record.userId ? `Account ${number} · User ID ${record.userId}` : `Account ${number}`;
 }
+// Pull the video id out of a YouTube link so it can play on the account.
 function youtubeId(url) {
   const match = String(url || "").match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,})/);
   return match ? match[1] : "";
 }
+// One block in an account. If they left it blank, the block is not shown.
 function bit(title, text) {
   if (!text) return "";
   return `<div class="bit"><h4>${esc(title)}</h4><p>${esc(text)}</p></div>`;
 }
+// One account, with meaning, example, emotion, context, and intention in their own blocks.
+// "Illustrative example" is added only when the record is one. It is not added to survey accounts.
 function meaningHtml(record, number) {
   const video = youtubeId(record.youtube);
   const media = `${record.image ? `<img alt="" src="${record.image}">` : ""}${record.audio ? `<audio controls src="${record.audio}"></audio>` : ""}${record.video ? `<video controls src="${record.video}"></video>` : ""}${video ? `<div class="video-frame"><iframe src="https://www.youtube-nocookie.com/embed/${video}" title="Playback" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>` : ""}`;
@@ -361,6 +424,8 @@ function meaningHtml(record, number) {
     ${media}
   </section>`;
 }
+// One book spine per language. Opening a book lists its words in alphabetical order.
+// Two accounts of the same word are grouped, then listed as Account 1 and Account 2.
 function renderShelves() {
   const host = document.getElementById("shelves");
   const q = norm(document.getElementById("shelf-search")?.value || "");
@@ -419,9 +484,11 @@ function renderShelves() {
   const page = words.find((record) => record.id === reading);
   if (page) spread.querySelector("#book-page").innerHTML = meaningHtml(page);
 }
+// Labels people added themselves, kept in this browser.
 function extraLabels() {
   try { return JSON.parse(localStorage.getItem("meaning-atlas-labels") || "{}") || {}; } catch { return {}; }
 }
+// The starting labels, plus any label that was added or already used. No duplicates.
 function labelsFor(layer) {
   const saved = extraLabels()[layer] || [];
   const used = state.records.flatMap((record) => record.tags?.[layer] || []);
@@ -433,6 +500,7 @@ function labelsFor(layer) {
     return true;
   }).sort((a, b) => a.localeCompare(b, "en"));
 }
+// Keep a new label so the next form offers it in the list.
 function rememberLabel(layer, value) {
   const clean = String(value || "").trim();
   if (!clean || VOCAB[layer].some((item) => item.toLowerCase() === clean.toLowerCase())) return;
@@ -441,6 +509,7 @@ function rememberLabel(layer, value) {
   if (!saved[layer].some((item) => item.toLowerCase() === clean.toLowerCase())) saved[layer].push(clean);
   localStorage.setItem("meaning-atlas-labels", JSON.stringify(saved));
 }
+// Draw the three label groups. Typing your own label and leaving the field adds it to the list and ticks it.
 function setupLabels() {
   const host = document.getElementById("labels");
   const checked = new Set([...host.querySelectorAll("input:checked")].map((input) => input.name + "=" + input.value));
@@ -576,6 +645,7 @@ document.querySelector("[name=meaning]").addEventListener("input", (event) => {
     host.append(button);
   });
 });
+// Come in as a guest or with an ID, then open the map or the account page.
 function enterAs(id, next) {
   const known = knownIds().find((item) => item.id === id) || {};
   state.session = { id, reveal: Boolean(known.reveal), name: known.name || "", contact: Boolean(known.contact), contactHow: known.contactHow || "", similar: Boolean(known.similar), passIsId: known.passIsId === true };
@@ -584,10 +654,12 @@ function enterAs(id, next) {
   who();
   show(next || "web");
 }
+// IDs made on this browser, with the hashed passphrase and the account choices.
 function knownIds() {
   const raw = JSON.parse(localStorage.getItem(KEY + "-ids") || "[]");
   return raw.map((item) => (typeof item === "string" ? { id: item, pass: "" } : item));
 }
+// Update this person's account and keep the passphrase hash with the ID.
 function saveProfile(fields) {
   const list = knownIds();
   const item = list.find((entry) => entry.id === state.session.id);
@@ -597,6 +669,10 @@ function saveProfile(fields) {
   Object.assign(state.session, fields);
   save();
 }
+// The account page. The ID is shown here, not on the map.
+// Until they change it, the passphrase is the user ID.
+// Name, contact, showing the ID, and similar-word updates are optional.
+// Saving the account returns them to the map.
 function renderProfile() {
   const host = document.getElementById("profile");
   if (!host) return;
@@ -660,6 +736,8 @@ function renderProfile() {
     show("web");
   };
 }
+// Your words. Separate from the account page.
+// If they asked for it, words that share an emotion or intention label are listed underneath, with how they might be used.
 function renderAccount() {
   const host = document.getElementById("mine");
   if (!host) return;
@@ -727,6 +805,7 @@ function renderAccount() {
     similar.append(empty);
   }
 }
+// A long ID. Checked against IDs already made here so two people do not get the same one.
 function freshId() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const taken = new Set(knownIds().map((item) => item.id));
@@ -736,6 +815,7 @@ function freshId() {
   } while (taken.has(id));
   return id;
 }
+// Open the owner page. It is not in the public navigation.
 function openOwner() {
   sessionStorage.setItem("atlas-owner", "1");
   sessionStorage.removeItem("atlas-open");
@@ -747,6 +827,8 @@ function openOwner() {
   renderOwnerWords();
   who();
 }
+// Language and account are both dropdowns.
+// All accounts lists them in alphabetical order. Picking one shows only that account.
 function renderOwnerWords() {
   const host = document.getElementById("owner-words");
   host.replaceChildren();
@@ -809,6 +891,8 @@ function renderOwnerWords() {
     host.append(form);
   });
 }
+// Make an ID. That ID is the passphrase until they change it.
+// The ID is shown on the account page, not on the main page.
 async function createId() {
   const id = freshId();
   const list = knownIds();
