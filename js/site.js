@@ -180,18 +180,24 @@ function enqueue(job) {
   return run;
 }
 async function publishWord(record) {
+  const deleted = new Set((await readBlob("deleted-ids")) || []);
+  if (deleted.has(record.id)) return false;
   record.updatedAt = Date.now();
   await writeBlob("w-" + record.id, sharedWord(record));
-  const ids = (await readBlob("word-ids")) || [];
+  const ids = ((await readBlob("word-ids")) || []).filter((id) => !deleted.has(id));
   if (!ids.includes(record.id)) {
     ids.push(record.id);
     await writeBlob("word-ids", ids);
   }
   await touchRev();
+  return true;
 }
-// Take one of this person's words off the shared copy, so other accounts stop seeing it.
+// A deleted word stays on a list. Another browser must not save that word back.
 async function unpublishWord(id) {
-  const ids = ((await readBlob("word-ids")) || []).filter((item) => item !== id);
+  const deleted = new Set((await readBlob("deleted-ids")) || []);
+  deleted.add(id);
+  await writeBlob("deleted-ids", [...deleted]);
+  const ids = ((await readBlob("word-ids")) || []).filter((item) => !deleted.has(item));
   await writeBlob("word-ids", ids);
   await kvSet("w-" + id + "-n", "0");
   await touchRev();
@@ -243,16 +249,20 @@ async function pullBoard() {
 }
 let lastStamp = "";
 async function refreshShared(full) {
+  let started = "";
   if (!full) {
-    const rev = await kvGet("rev");
-    if (rev && rev === seenRev) return;
-  }
+    started = await kvGet("rev");
+    if (started && started === seenRev) return;
+  } else started = await kvGet("rev");
   const localById = new Map(state.records.map((record) => [record.id, record]));
-  const ids = (await readBlob("word-ids")) || [];
+  const deleted = new Set((await readBlob("deleted-ids")) || []);
+  const rawIds = (await readBlob("word-ids")) || [];
+  const ids = rawIds.filter((id) => !deleted.has(id));
+  if (ids.length !== rawIds.length) await writeBlob("word-ids", ids);
   const loaded = await Promise.all(ids.map((id) => readBlob("w-" + id)));
   const byId = new Map();
   loaded.forEach((record) => {
-    if (!record) return;
+    if (!record || deleted.has(record.id)) return;
     const previous = localById.get(record.id);
     if (previous) {
       if (!record.image && previous.image) record.image = previous.image;
@@ -261,13 +271,12 @@ async function refreshShared(full) {
     }
     byId.set(record.id, record);
   });
-  const pending = state.records.filter((record) => record.id && !byId.has(record.id));
+  const pending = state.records.filter((record) => record.id && !deleted.has(record.id) && !byId.has(record.id));
   for (const record of pending) {
-    await publishWord(record);
-    byId.set(record.id, record);
+    if (await publishWord(record)) byId.set(record.id, record);
   }
   if (!byId.size) {
-    const seeds = load().records.filter((record) => record.source === "survey" || record.source === "example");
+    const seeds = load().records.filter((record) => (record.source === "survey" || record.source === "example") && !deleted.has(record.id));
     for (const record of seeds) {
       record.updatedAt = record.updatedAt || 1;
       await publishWord(record);
@@ -281,7 +290,8 @@ async function refreshShared(full) {
     await pullAccounts();
     boardTime = await pullBoard();
   }
-  seenRev = await kvGet("rev");
+  const now = await kvGet("rev");
+  if (!started || now === started) seenRev = now || started;
   const stamp = boardTime + "|" + state.records.map((record) => record.id + ":" + (record.updatedAt || 0)).sort().join("|");
   if (stamp === lastStamp) return;
   lastStamp = stamp;
@@ -865,8 +875,20 @@ document.getElementById("add").onsubmit = async (event) => {
 async function deleteWord(record) {
   if (!state.session || state.session.id === "guest" || record.userId !== state.session.id) return;
   const note = document.getElementById("words-note");
+  const id = record.id;
   try {
-    await enqueue(() => unpublishWord(record.id));
+    await enqueue(async () => {
+      await unpublishWord(id);
+      state.records = state.records.filter((item) => item.id !== id);
+      if (editingId === id) editingId = null;
+      if (reading === id) reading = null;
+      const key = norm(record.expression) + "|" + norm(record.language);
+      if (selected === key && !state.records.some((item) => norm(item.expression) + "|" + norm(item.language) === key)) {
+        selected = null;
+        panelMode = "start";
+      }
+      try { save(); } catch { /* The shared copy already dropped it. */ }
+    });
   } catch {
     const text = "This word was not deleted for the other accounts. Nothing was changed.";
     if (note) note.textContent = text;
@@ -882,15 +904,6 @@ async function deleteWord(record) {
     }
     return;
   }
-  state.records = state.records.filter((item) => item.id !== record.id);
-  if (editingId === record.id) editingId = null;
-  if (reading === record.id) reading = null;
-  const key = norm(record.expression) + "|" + norm(record.language);
-  if (selected === key && !state.records.some((item) => norm(item.expression) + "|" + norm(item.language) === key)) {
-    selected = null;
-    panelMode = "start";
-  }
-  try { save(); } catch { /* The shared copy already dropped it. */ }
   if (note) note.textContent = "";
   if (view === "account") renderAccount();
   if (view === "web") renderWeb();
@@ -1250,6 +1263,6 @@ who();
 show("web");
 syncShared(true).catch(() => {});
 // An open page asks if anything new was saved. It does not sit for two minutes.
-setInterval(() => { if (document.visibilityState === "visible") syncShared(false).catch(() => {}); }, 4000);
+setInterval(() => { if (document.visibilityState === "visible") syncShared(false).catch(() => {}); }, 2000);
 window.addEventListener("focus", () => { syncShared(false).catch(() => {}); });
 window.addEventListener("resize", () => { if (view === "web") renderWeb(); });
