@@ -172,6 +172,9 @@ async function pullAccounts() {
     map.set(item.id, { ...(map.get(item.id) || {}), ...item, _crud: crud });
   });
   localStorage.setItem(KEY + "-ids", JSON.stringify([...map.values()]));
+  for (const account of map.values()) {
+    if (!account._crud && account.id && account.pass) await publishAccount(account);
+  }
 }
 async function publishBoard() {
   let labels = {};
