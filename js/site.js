@@ -205,7 +205,7 @@ function renderWeb() {
   nodes.forEach((node) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "node word" + (node.key === selected ? " on" : "");
+    button.className = "node word" + (node.key === selected ? " on" : "") + (selectedLine && (selectedLine.a === node.key || selectedLine.b === node.key) ? " linked" : "");
     const example = node.accounts.every((record) => record.source === "example");
     button.innerHTML = `<b>${esc(node.expression)}</b><small>${esc(node.language)}${node.accounts.length > 1 ? " · " + node.accounts.length + " accounts" : ""}${example ? " · example" : ""}</small>`;
     button.style.left = node.x + "px";
@@ -227,7 +227,12 @@ function renderPanel(nodes) {
     return;
   }
   if (selectedLine && panelMode === "line") {
-    panel.innerHTML = `<article class="story"><h2>This connection</h2><p>${esc(selectedLine.from)} and ${esc(selectedLine.to)} were both given ${selectedLine.tags.map(esc).join(", ")} under ${esc(selectedLine.layer)}.</p><p>That is a shared label. It does not mean the experiences are the same.</p><button type="button" class="btn" id="close-line">Close connection</button></article>`;
+    const layerName = { emotion: "Emotion", context: "Context", intention: "Intention" }[selectedLine.layer] || selectedLine.layer;
+    panel.innerHTML = `<article class="story"><h2>This connection</h2>
+      <div class="bit"><h4>Words</h4><p>${esc(selectedLine.from)} and ${esc(selectedLine.to)}</p></div>
+      <div class="bit"><h4>What connects them</h4><p>${selectedLine.tags.map(esc).join(", ")}</p></div>
+      <div class="bit"><h4>Kind</h4><p>${esc(layerName)}. A shared label does not mean the experiences are the same.</p></div>
+      <button type="button" class="btn" id="close-line">Close connection</button></article>`;
     document.getElementById("close-line").onclick = () => { selectedLine = null; panelMode = "start"; renderWeb(); };
     return;
   }
@@ -237,27 +242,50 @@ function renderPanel(nodes) {
     document.getElementById("open-how").onclick = () => { panelMode = "how"; renderWeb(); };
     return;
   }
-  panel.innerHTML = `<article class="story"><p class="legend">${esc(chosen.language)} · ${chosen.accounts.length} ${chosen.accounts.length === 1 ? "account" : "accounts"}</p><h2>${esc(chosen.expression)}</h2><button type="button" class="btn" id="close-account">Close account</button>${chosen.accounts.map((record, index) => meaningHtml(record, index + 1)).join("")}</article>`;
+  const jumps = chosen.accounts.map((record, index) => {
+    const who = record.reveal && record.userId ? ` · ${esc(record.userId)}` : "";
+    return `<button type="button" data-jump="acct-${record.id}">Account ${index + 1}${who}</button>`;
+  }).join("");
+  panel.innerHTML = `<article class="story"><div id="account-top"><p class="legend">${esc(chosen.language)}</p><h2>${esc(chosen.expression)}</h2><nav class="account-jump">${jumps}</nav><button type="button" class="btn" id="close-account">Close</button></div>${chosen.accounts.map((record, index) => meaningHtml(record, index + 1)).join("")}</article>`;
   document.getElementById("close-account").onclick = () => { selected = null; panelMode = "start"; renderWeb(); };
+  panel.querySelectorAll("[data-jump]").forEach((button) => {
+    button.onclick = () => document.getElementById(button.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  panel.querySelectorAll("[data-top]").forEach((button) => {
+    button.onclick = () => document.getElementById("account-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+function youtubeId(url) {
+  const match = String(url || "").match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/))([A-Za-z0-9_-]{6,})/);
+  return match ? match[1] : "";
+}
+function bit(title, text) {
+  if (!text) return "";
+  return `<div class="bit"><h4>${esc(title)}</h4><p>${esc(text)}</p></div>`;
 }
 function meaningHtml(record, number) {
-  const rows = [
-    ["Languages you use", record.languagePractice],
-    ["Where it comes from", record.origin],
-    ["Also used in", record.also],
-    ["Meaning", record.meaning],
-    ["Example", record.example],
-    ["Feeling", record.feeling],
-    ["How you would explain it", record.rephrasing],
-    ["What changes", record.change],
-    ["Who you are around", record.withheld],
-    ["Being yourself", record.identity],
-    ["When an expression is unfamiliar", record.listenerPractice],
-  ].filter((row) => row[1]);
-  const who = record.reveal && record.userId ? esc(record.userId) : "";
+  const who = record.reveal && record.userId ? ` · ${esc(record.userId)}` : "";
   const badge = record.source === "example" ? `<span class="badge">Illustrative example</span>` : "";
-  const media = `${record.image ? `<img alt="" src="${record.image}">` : ""}${record.audio ? `<audio controls src="${record.audio}"></audio>` : ""}${record.video ? `<video controls src="${record.video}"></video>` : ""}`;
-  return `<section class="account"><h3>Account ${number || 1}${who ? " · " + who : ""}</h3>${badge}<p class="legend">${esc(record.language)}${record.community ? " · " + esc(record.community) : ""}</p>${rows.map((row) => `<div class="pair"><span>${esc(row[0])}</span><p>${esc(row[1])}</p></div>`).join("")}${media}</section>`;
+  const video = youtubeId(record.youtube);
+  const media = `${record.image ? `<img alt="" src="${record.image}">` : ""}${record.audio ? `<audio controls src="${record.audio}"></audio>` : ""}${record.video ? `<video controls src="${record.video}"></video>` : ""}${video ? `<div class="video-frame"><iframe src="https://www.youtube-nocookie.com/embed/${video}" title="Playback" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>` : ""}`;
+  return `<section class="account" id="acct-${record.id}">
+    <button type="button" class="btn back-top" data-top="1">Back to accounts</button>
+    <h3>Account ${number || 1}${who}</h3>${badge}
+    ${bit("Meaning", record.meaning)}
+    ${bit("Example", record.example)}
+    ${bit("Emotion", record.feeling)}
+    ${bit("Context", record.context)}
+    ${bit("Intention", record.intention)}
+    ${bit("Also used in", record.also || record.alsoUsed)}
+    ${bit("Where it comes from", record.origin)}
+    ${bit("How you would explain it", record.rephrasing)}
+    ${bit("What changes", record.change)}
+    ${bit("Who you are around", record.withheld)}
+    ${bit("Being yourself", record.identity)}
+    ${bit("When an expression is unfamiliar", record.listenerPractice)}
+    ${bit("Languages you use", record.languagePractice)}
+    ${media}
+  </section>`;
 }
 function renderShelves() {
   const host = document.getElementById("shelves");
@@ -350,16 +378,38 @@ stage.onpointermove = (event) => { if (!drag) return; yaw = drag.yaw + (event.cl
 stage.onpointerup = () => { drag = null; };
 document.getElementById("add").onsubmit = async (event) => {
   event.preventDefault();
-  if (!state.session) { document.getElementById("add-note").textContent = "Come in from the home page first."; return; }
   const form = event.currentTarget;
+  if (!state.session) { document.getElementById("add-note").textContent = "Come in from the home page first."; return; }
+  if (!form.example.value.trim() || !form.emotion.value.trim() || !form.context.value.trim() || !form.intention.value.trim()) {
+    document.getElementById("add-note").textContent = "An example, an emotion, a context, and an intention are required.";
+    return;
+  }
+  const missing = ["emotion", "context", "intention"].filter((layer) => {
+    const picked = [...form.querySelectorAll(`[name="tag-${layer}"]:checked`)];
+    const own = form.querySelector(`[name="own-${layer}"]`)?.value.trim();
+    return !picked.length && !own;
+  });
+  if (missing.length) {
+    document.getElementById("add-note").textContent = "Choose at least one label for " + missing.join(", ") + ". A line uses that label when someone clicks it.";
+    return;
+  }
+  const tooBig = [...form.querySelectorAll("input[type=file]")].find((input) => input.files[0] && input.files[0].size > 1_500_000);
+  if (tooBig) {
+    document.getElementById("add-note").textContent = "That file is larger than the maximum of 1.5 MB. Send it to the owner. They can give you a private YouTube link to paste in the form.";
+    return;
+  }
   const file = async (input) => input.files[0] ? await new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(input.files[0]); }) : "";
   const record = {
-    id: crypto.randomUUID(), userId: state.session.id, reveal: false,
+    id: crypto.randomUUID(), userId: state.session.id, reveal: Boolean(state.session.reveal),
     expression: form.expression.value.trim(), language: form.language.value.split(";")[0].trim(),
     also: form.also.value.trim(),
     languagePractice: form.languagePractice.value.trim(),
     origin: form.origin.value.trim(),
     example: form.example.value.trim(),
+    feeling: form.emotion.value.trim(),
+    context: form.context.value.trim(),
+    intention: form.intention.value.trim(),
+    youtube: form.youtube.value.trim(),
     rephrasing: form.rephrasing.value.trim(),
     withheld: form.withheld.value.trim(),
     identity: form.identity.value.trim(),
@@ -442,9 +492,12 @@ function renderAccount() {
     button.onclick = () => {
       editingId = record.id;
       const form = document.getElementById("add");
-      ["expression", "language", "also", "languagePractice", "origin", "meaning", "example", "rephrasing", "withheld", "identity", "listenerPractice"].forEach((name) => {
+      ["expression", "language", "also", "languagePractice", "origin", "meaning", "example", "rephrasing", "withheld", "identity", "listenerPractice", "youtube"].forEach((name) => {
         if (form[name]) form[name].value = record[name] || (name === "also" ? record.also || "" : "");
       });
+      if (form.emotion) form.emotion.value = record.feeling || "";
+      if (form.context) form.context.value = record.context || "";
+      if (form.intention) form.intention.value = record.intention || "";
       show("add");
     };
     row.append(button);
@@ -513,7 +566,7 @@ document.querySelectorAll("#add input[type=file]").forEach((input) => {
     host.querySelector(`[data-file="${name}"]`)?.remove();
     const file = input.files[0];
     if (!file) return;
-    if (file.size > 1_500_000) { input.value = ""; document.getElementById("add-note").textContent = "That file is over 1.5 MB."; return; }
+    if (file.size > 1_500_000) { input.value = ""; document.getElementById("add-note").textContent = "That file is larger than the maximum of 1.5 MB. Send it to the owner. They can give you a private YouTube link. Paste that link in the form and it will play on the account."; return; }
     const box = document.createElement("p");
     box.dataset.file = name;
     box.textContent = `${name}: ${file.name}`;

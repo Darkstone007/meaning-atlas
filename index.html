@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/atlas.css?v=20261013e">
+  <link rel="stylesheet" href="css/atlas.css?v=20261013f">
 </head>
 <body>
   <section id="welcome" class="gate">
@@ -77,13 +77,16 @@
       <section id="view-add" hidden>
         <form id="add" class="form">
           <h2>Add what it means to you</h2>
-          <p class="lede">Start with the word, one language, what it means to you, and an example. That is enough. The rest is optional. This does not need to be a dictionary definition.</p>
+          <p class="lede">The word, one language, what it means, an example, and the emotion, context, and intention are required. Everything else can wait.</p>
           <div class="two">
             <label>Word <span class="req">Required</span><input name="expression" required maxlength="120"></label>
             <label>One language <span class="req">Required</span><input name="language" required maxlength="80"></label>
           </div>
           <label>What it means to you <span class="req">Required</span><textarea name="meaning" required></textarea></label>
-          <label>An example of how you use it <span class="opt">Optional</span><textarea name="example"></textarea></label>
+          <label>An example of how you use it <span class="req">Required</span><textarea name="example" required></textarea></label>
+          <label>Emotion <span class="req">Required</span><textarea name="emotion" required placeholder="The feeling in this use"></textarea></label>
+          <label>Context <span class="req">Required</span><textarea name="context" required placeholder="Who you use it with, and where"></textarea></label>
+          <label>Intention <span class="req">Required</span><textarea name="intention" required placeholder="What you are trying to do with it"></textarea></label>
           <details>
             <summary>More about the word, if you want</summary>
             <label>Also used in other languages <span class="opt">Optional</span><input name="also" placeholder="Separate with ;"></label>
@@ -97,7 +100,8 @@
           </details>
           <details>
             <summary>Picture, voice, or video, if you want</summary>
-            <p class="legend">JPEG, PNG, WebP or GIF. Audio as MP3, WAV or OGG. Video as MP4 or WebM. Each file up to about 1.5 MB. It appears only on your account, and only if you leave a file here. Nothing blank is shown.</p>
+            <p class="legend">Maximum size is 1.5 MB for each file. JPEG, PNG, WebP or GIF. Audio as MP3, WAV or OGG. Video as MP4 or WebM. If a file is larger than 1.5 MB, it will not upload. Send that file to the owner. They can give you a private YouTube link. Paste it below and it will play on the account. Leave a slot empty and nothing blank is shown.</p>
+            <label>Private YouTube link <span class="opt">Optional</span><input name="youtube" placeholder="https://www.youtube.com/watch?v=…"></label>
             <div class="uploads">
               <label>Image <span class="opt">Optional</span><input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
               <label>Audio <span class="opt">Optional</span><input name="audio" type="file" accept="audio/*"></label>
@@ -128,7 +132,7 @@
       <p class="note" id="owner-note"></p>
     </div>
   </section>
-  <script src="js/data.js?v=20261013e"></script>
-  <script src="js/site.js?v=20261013e"></script>
+  <script src="js/data.js?v=20261013f"></script>
+  <script src="js/site.js?v=20261013f"></script>
 </body>
 </html>
