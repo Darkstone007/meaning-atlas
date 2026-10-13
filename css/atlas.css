@@ -187,7 +187,20 @@ textarea { min-height: 96px; resize: vertical; }
 .volume .pages button { background: transparent; color: #1c1424; border: 0; border-bottom: 1px solid #d8cce0; border-radius: 0; width: 100%; text-align: left; }
 @keyframes openbook { from { opacity: 0; } to { opacity: 1; } }
 .node.on { background: var(--lilac); color: #1a1220; }
-.legend, .count { color: var(--quiet); font-size: 13px; }
+.legend, .count { color: #e6dcf0; font-size: 16px; line-height: 1.5; }
+.map-row { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+.panel-card { background: #17141d; border: 1px solid #3a3148; border-radius: 18px; padding: 18px 16px; max-height: 70vh; overflow: auto; }
+.panel-card h2, .panel-card h3, .panel-card p { color: #f4eef8; }
+.badge { display: inline-block; margin: 6px 0; padding: 4px 8px; border-radius: 999px; background: #3a2a4a; color: #c6b08a; font-size: 13px; }
+.req { color: #e7c9c9; font-size: 13px; }
+.opt { color: #c6b08a; font-size: 13px; }
+.steps { padding-left: 18px; line-height: 1.55; }
+.stage svg { pointer-events: none; }
+.stage svg line { pointer-events: stroke; }
+.spread nav button, .spread header button { border: 1px solid #5a3f72; border-radius: 10px; margin: 6px 0; padding: 8px 10px; background: #fff; }
+.spread nav button.on { background: #d7c6e6; border-color: #3a2a4a; }
+.word-group { font-weight: 600; margin: 12px 0 4px; }
+@media (max-width: 860px) { .map-row { grid-template-columns: 1fr; } .panel-card { max-height: none; } }
 .story {
   margin-top: 22px;
   padding: 8px 4px 0;

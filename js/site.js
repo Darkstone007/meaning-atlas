@@ -35,6 +35,8 @@ const HINTS = [
 let state = load();
 let view = "home";
 let selected = null;
+let selectedLine = null;
+let panelMode = "start";
 let yaw = 24;
 let pitch = 16;
 let drag = null;
@@ -44,9 +46,8 @@ const OWNER_HASH = "a3b39f5277df6de836221ba3271b8f265f1810fdf9f48f98e402f0c72480
 let copy = {
   title: "What this is",
   paragraphs: [
-    "Meaning Atlas is a place to follow a word into the account around it: how someone uses it, who they use it with, where it comes from for them, and a picture, voice, or a video only if they gave one.",
-    "Each word belongs to one language. If it is also used in other languages, that is written beside it and does not make another shelf. Massa is Wolof. The proverb is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples, not survey findings.",
-    "The web holds words, not people. Press a word and the survey answers appear here. Press it again and this note returns. A dashed line is a shared label, not a cultural score. Turning the web does not measure closeness. People stay hidden unless they choose to show an ID.",
+    "The current website is a proof of concept for Meaning Atlas. I wanted to show how a word can open into someone’s personal experience, including what it means to them, how they use it, and the emotions or memories attached to it. Visitors can explore the map, search for words, and select them to read the accounts behind them. The connections show where people have used similar labels for feelings, contexts, or intentions, while still keeping their individual explanations visible.",
+    "With the wider project, I want to explore what we miss when we translate a word without understanding the person or context behind it. Meaning Atlas would become an interactive installation where people can explore these accounts and contribute their own. I am considering a projected map alongside VR, where others can see an avatar interacting with the nodes, and a possible floor projection that visitors can explore separately. People would also be able to scan a QR code and add words through their phones. The aim is to let people find connections across their experiences while leaving room for meanings that are different or difficult to explain.",
   ],
 };
 let editingId = null;
@@ -59,7 +60,7 @@ async function sha(text) {
 }
 function currentCopy() {
   try {
-    const saved = JSON.parse(localStorage.getItem("meaning-atlas-copy") || "null");
+    const saved = JSON.parse(localStorage.getItem("meaning-atlas-copy-v2") || "null");
     if (saved && Array.isArray(saved.paragraphs)) return saved;
   } catch { /* use the file */ }
   return copy;
@@ -120,18 +121,52 @@ function renderHome() {
   document.getElementById("make")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
 }
 function who() {
-  const inside = sessionStorage.getItem("atlas-open") === "1";
+  const owner = sessionStorage.getItem("atlas-owner") === "1";
+  const inside = sessionStorage.getItem("atlas-open") === "1" && !owner;
   const welcome = document.getElementById("welcome");
   const app = document.getElementById("app");
-  if (welcome) welcome.hidden = inside;
+  const ownerPage = document.getElementById("owner-page");
+  if (welcome) welcome.hidden = inside || owner;
   if (app) app.hidden = !inside;
+  if (ownerPage) ownerPage.hidden = !owner;
   const whoNode = document.getElementById("who");
-  if (whoNode) whoNode.textContent = inside && state.session ? state.session.id : "Log in";
+  if (whoNode) whoNode.textContent = state.session?.id === "guest" ? "Guest" : "ID hidden";
+}
+function separate(nodes) {
+  const stage = document.getElementById("stage");
+  const pad = 78;
+  for (let pass = 0; pass < 14; pass++) {
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        let dx = nodes[j].x - nodes[i].x;
+        let dy = nodes[j].y - nodes[i].y;
+        const dist = Math.hypot(dx, dy) || 1;
+        if (dist < 158) {
+          const push = (158 - dist) / 2;
+          dx /= dist; dy /= dist;
+          nodes[i].x -= dx * push; nodes[i].y -= dy * push;
+          nodes[j].x += dx * push; nodes[j].y += dy * push;
+        }
+      }
+    }
+  }
+  nodes.forEach((node) => {
+    node.x = Math.max(pad, Math.min(stage.clientWidth - pad, node.x));
+    node.y = Math.max(46, Math.min(stage.clientHeight - 46, node.y));
+  });
+}
+function sharedTags(left, right, layer) {
+  const have = new Set(left.accounts.flatMap((record) => record.tags?.[layer] || []));
+  return [...new Set(right.accounts.flatMap((record) => record.tags?.[layer] || []))].filter((tag) => have.has(tag));
 }
 function renderWeb() {
   const list = groups();
   const stage = document.getElementById("stage");
+  const note = document.getElementById("search-note");
+  const query = document.getElementById("search")?.value.trim();
+  if (note) note.textContent = list.length ? `${list.length} ${list.length === 1 ? "word" : "words"}${query ? " match this search" : ""}. Choose a word to discover what it means to someone.` : "No results. Try another word, or clear the search.";
   stage.replaceChildren();
+  if (!list.length) { renderPanel(); return; }
   const layer = document.getElementById("layer").value;
   const golden = Math.PI * (3 - Math.sqrt(5));
   const nodes = list.map((group, index) => {
@@ -139,17 +174,30 @@ function renderWeb() {
     const y = 1 - (index / (count - 1)) * 2;
     const ring = Math.sqrt(Math.max(0, 1 - y * y));
     const theta = golden * index;
-    const point = project([Math.cos(theta) * ring * 230, y * 150, Math.sin(theta) * ring * 230]);
+    const point = project([Math.cos(theta) * ring * 280, y * 170, Math.sin(theta) * ring * 280]);
     return { ...group, x: point[0], y: point[1] };
   });
+  separate(nodes);
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   if (layer !== "none") {
     for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
-      const shared = nodes[i].accounts.some((a) => nodes[j].accounts.some((b) => (a.tags[layer] || []).some((tag) => (b.tags[layer] || []).includes(tag))));
-      if (!shared) continue;
+      const tags = sharedTags(nodes[i], nodes[j], layer);
+      if (!tags.length) continue;
       const line = document.createElementNS(svg.namespaceURI, "line");
       line.setAttribute("x1", nodes[i].x); line.setAttribute("y1", nodes[i].y); line.setAttribute("x2", nodes[j].x); line.setAttribute("y2", nodes[j].y);
-      line.setAttribute("stroke", "#d7c6e6"); line.setAttribute("stroke-dasharray", "5 6");
+      const on = selectedLine && selectedLine.a === nodes[i].key && selectedLine.b === nodes[j].key;
+      line.setAttribute("stroke", on ? "#c6b08a" : "#d7c6e6");
+      line.setAttribute("stroke-width", on ? "3" : "1.5");
+      line.setAttribute("stroke-dasharray", "5 6");
+      line.style.pointerEvents = "stroke";
+      line.style.cursor = "pointer";
+      line.onclick = (event) => {
+        event.stopPropagation();
+        selected = null;
+        panelMode = "line";
+        selectedLine = { a: nodes[i].key, b: nodes[j].key, from: nodes[i].expression, to: nodes[j].expression, tags, layer };
+        renderWeb();
+      };
       svg.append(line);
     }
   }
@@ -158,18 +206,41 @@ function renderWeb() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "node word" + (node.key === selected ? " on" : "");
-    button.innerHTML = `<b>${node.expression}</b><small>${node.language}</small>`;
+    const example = node.accounts.every((record) => record.source === "example");
+    button.innerHTML = `<b>${esc(node.expression)}</b><small>${esc(node.language)}${node.accounts.length > 1 ? " · " + node.accounts.length + " accounts" : ""}${example ? " · example" : ""}</small>`;
     button.style.left = node.x + "px";
     button.style.top = node.y + "px";
     button.onpointerdown = (event) => event.stopPropagation();
-    button.onclick = () => { selected = selected === node.key ? null : node.key; renderWeb(); };
+    button.onclick = () => { selectedLine = null; panelMode = "word"; selected = node.key; renderWeb(); };
     stage.append(button);
   });
-  const under = document.getElementById("under");
-  const chosen = nodes.find((node) => node.key === selected);
-  under.innerHTML = chosen ? chosen.accounts.map(meaningHtml).join("") : `<article class="story">${projectHtml()}</article>`;
+  renderPanel(nodes);
 }
-function meaningHtml(record) {
+function renderPanel(nodes) {
+  const panel = document.getElementById("panel");
+  if (!panel) return;
+  const chosen = (nodes || []).find((node) => node.key === selected);
+  if (panelMode === "about") { panel.innerHTML = `<article class="story">${projectHtml()}<button type="button" class="btn" id="back-start">Back</button></article>`; document.getElementById("back-start").onclick = () => { panelMode = "start"; renderWeb(); }; return; }
+  if (panelMode === "how") {
+    panel.innerHTML = `<article class="story"><h2>How to explore</h2><ol class="steps"><li>Enter the site. Explore as a guest, or make a record and return with that ID.</li><li>Choose a word on the map.</li><li>Read the account beside it: meaning, feeling, context, intention, and what changes.</li><li>Click a dashed line to see the shared label. The layer chooses which kind of label. A shared label does not mean the experiences are the same.</li><li>Search for a word, language, or meaning. Clear the search to return to the wider map.</li><li>Open Shelves to read the words by language.</li><li>Add a word when you want to. It does not need to be a dictionary definition.</li><li>Open Your words to find what this record posted.</li></ol><button type="button" class="btn" id="back-start">Back</button></article>`;
+    document.getElementById("back-start").onclick = () => { panelMode = "start"; renderWeb(); };
+    return;
+  }
+  if (selectedLine && panelMode === "line") {
+    panel.innerHTML = `<article class="story"><h2>This connection</h2><p>${esc(selectedLine.from)} and ${esc(selectedLine.to)} were both given ${selectedLine.tags.map(esc).join(", ")} under ${esc(selectedLine.layer)}.</p><p>That is a shared label. It does not mean the experiences are the same.</p><button type="button" class="btn" id="close-line">Close connection</button></article>`;
+    document.getElementById("close-line").onclick = () => { selectedLine = null; panelMode = "start"; renderWeb(); };
+    return;
+  }
+  if (!chosen) {
+    panel.innerHTML = `<article class="story"><h2>Choose a word</h2><p>Choose a word to discover what it means to someone.</p><button type="button" class="btn" id="open-about">What this is</button><button type="button" class="btn" id="open-how">How to explore</button></article>`;
+    document.getElementById("open-about").onclick = () => { panelMode = "about"; renderWeb(); };
+    document.getElementById("open-how").onclick = () => { panelMode = "how"; renderWeb(); };
+    return;
+  }
+  panel.innerHTML = `<article class="story"><p class="legend">${esc(chosen.language)} · ${chosen.accounts.length} ${chosen.accounts.length === 1 ? "account" : "accounts"}</p><h2>${esc(chosen.expression)}</h2><button type="button" class="btn" id="close-account">Close account</button>${chosen.accounts.map((record, index) => meaningHtml(record, index + 1)).join("")}</article>`;
+  document.getElementById("close-account").onclick = () => { selected = null; panelMode = "start"; renderWeb(); };
+}
+function meaningHtml(record, number) {
   const rows = [
     ["Languages you use", record.languagePractice],
     ["Where it comes from", record.origin],
@@ -183,8 +254,10 @@ function meaningHtml(record) {
     ["Being yourself", record.identity],
     ["When an expression is unfamiliar", record.listenerPractice],
   ].filter((row) => row[1]);
+  const who = record.reveal && record.userId ? esc(record.userId) : "";
+  const badge = record.source === "example" ? `<span class="badge">Illustrative example</span>` : "";
   const media = `${record.image ? `<img alt="" src="${record.image}">` : ""}${record.audio ? `<audio controls src="${record.audio}"></audio>` : ""}${record.video ? `<video controls src="${record.video}"></video>` : ""}`;
-  return `<article class="story"><h2>${record.expression}</h2><p class="legend">${record.language}${record.community ? " · " + record.community : ""}</p>${rows.map((row) => `<div class="pair"><span>${row[0]}</span><p>${row[1]}</p></div>`).join("")}${media}</article>`;
+  return `<section class="account"><h3>Account ${number || 1}${who ? " · " + who : ""}</h3>${badge}<p class="legend">${esc(record.language)}${record.community ? " · " + esc(record.community) : ""}</p>${rows.map((row) => `<div class="pair"><span>${esc(row[0])}</span><p>${esc(row[1])}</p></div>`).join("")}${media}</section>`;
 }
 function renderShelves() {
   const host = document.getElementById("shelves");
@@ -212,13 +285,34 @@ function renderShelves() {
   host.append(spread);
   spread.querySelector("#close-book").onclick = () => { openBook = null; reading = null; renderShelves(); };
   const nav = spread.querySelector("#book-words");
+  const grouped = new Map();
   words.forEach((record) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = record.expression;
-    if (reading === record.id) button.className = "on";
-    button.onclick = () => { reading = reading === record.id ? null : record.id; renderShelves(); };
-    nav.append(button);
+    const key = norm(record.expression);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(record);
+  });
+  [...grouped.values()].sort((a, b) => a[0].expression.localeCompare(b[0].expression, "en")).forEach((group) => {
+    if (group.length === 1) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = group[0].expression + (group[0].source === "example" ? " · example" : "");
+      if (reading === group[0].id) button.className = "on";
+      button.onclick = () => { reading = reading === group[0].id ? null : group[0].id; renderShelves(); };
+      nav.append(button);
+      return;
+    }
+    const head = document.createElement("p");
+    head.className = "word-group";
+    head.textContent = `${group[0].expression} · ${group.length} accounts`;
+    nav.append(head);
+    group.forEach((record, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `Account ${index + 1}`;
+      if (reading === record.id) button.className = "on";
+      button.onclick = () => { reading = reading === record.id ? null : record.id; renderShelves(); };
+      nav.append(button);
+    });
   });
   const page = words.find((record) => record.id === reading);
   if (page) spread.querySelector("#book-page").innerHTML = meaningHtml(page);
@@ -270,7 +364,9 @@ document.getElementById("add").onsubmit = async (event) => {
     withheld: form.withheld.value.trim(),
     identity: form.identity.value.trim(),
     listenerPractice: form.listenerPractice.value.trim(),
-    meaning: form.meaning.value.trim(), community: "",
+    meaning: form.meaning.value.trim(),
+    change: form.change ? form.change.value.trim() : "",
+    community: "",
     tags: { emotion: [], context: [], intention: [] },
     image: await file(form.image), audio: await file(form.audio), video: await file(form.video), source: "visitor",
   };
@@ -303,7 +399,8 @@ document.querySelector("[name=meaning]").addEventListener("input", (event) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "btn";
-    button.textContent = `Add ${hint[1]} · ${hint[0]}`;
+    button.textContent = `Accept ${hint[1]} as ${hint[0]}`;
+    button.title = `Suggested because you wrote something like “${hint[2][0]}”. Nothing is added until you accept it.`;
     button.onclick = () => { const box = document.querySelector(`[name="tag-${hint[0]}"][value="${hint[1]}"]`); if (box) box.checked = true; };
     host.append(button);
   });
@@ -323,8 +420,17 @@ function renderAccount() {
   const host = document.getElementById("mine");
   if (!host) return;
   host.replaceChildren();
+  const reveal = document.createElement("label");
+  reveal.className = "legend";
+  reveal.innerHTML = `<input type="checkbox" ${state.session?.reveal ? "checked" : ""}> Show my ID beside my words`;
+  reveal.querySelector("input").onchange = (event) => {
+    state.session.reveal = event.target.checked;
+    state.records.forEach((record) => { if (record.userId === state.session.id) record.reveal = event.target.checked; });
+    save();
+  };
+  host.append(reveal);
   const mine = state.records.filter((record) => record.userId === state.session?.id).sort((a, b) => a.expression.localeCompare(b.expression, "en"));
-  if (!mine.length) { host.textContent = "You have not posted a word yet."; return; }
+  if (!mine.length) { const empty = document.createElement("p"); empty.textContent = "You have not posted a word yet."; host.append(empty); return; }
   mine.forEach((record) => {
     const row = document.createElement("article");
     row.className = "book";
@@ -345,51 +451,80 @@ function renderAccount() {
     host.append(row);
   });
 }
+function freshId() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const taken = new Set(knownIds().map((item) => item.id));
+  let id = "";
+  do {
+    id = "U-" + [...crypto.getRandomValues(new Uint8Array(12))].map((byte) => alphabet[byte % alphabet.length]).join("");
+  } while (taken.has(id));
+  return id;
+}
+function openOwner() {
+  sessionStorage.setItem("atlas-owner", "1");
+  sessionStorage.removeItem("atlas-open");
+  const text = currentCopy();
+  document.getElementById("copy-title").value = text.title || "";
+  document.getElementById("copy-body").value = (text.paragraphs || []).join("\n\n");
+  who();
+}
 document.getElementById("guest")?.addEventListener("click", () => enterAs("guest"));
 document.getElementById("make")?.addEventListener("click", async () => {
   const pass = document.getElementById("login-pass").value;
-  if (pass.length < 4) { document.getElementById("welcome-note").textContent = "Choose a passphrase of at least 4 characters in the login form, then make an ID."; return; }
-  const id = "U-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-  const list = knownIds().filter((item) => item.id !== id);
+  if (pass.length < 4) { document.getElementById("welcome-note").textContent = "Type a passphrase of at least 4 characters, then make an ID."; return; }
+  const id = freshId();
+  const list = knownIds();
   list.push({ id, pass: await sha(pass) });
   localStorage.setItem(KEY + "-ids", JSON.stringify(list));
-  document.getElementById("welcome-note").textContent = "Your ID is " + id + ". Write it down with the passphrase.";
+  document.getElementById("welcome-note").textContent = "Write this down. Your ID is " + id + ".";
   enterAs(id);
 });
 document.getElementById("login-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const id = document.getElementById("login-id").value.trim().toUpperCase();
+  const id = document.getElementById("login-id").value.trim();
   const pass = document.getElementById("login-pass").value;
-  const found = knownIds().find((item) => item.id === id);
-  if (!found || (found.pass && found.pass !== await sha(pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match an ID made on this browser."; return; }
-  enterAs(id);
+  if (id.toLowerCase() === "darkstone007" && pass === "atlas-owner") { openOwner(); return; }
+  const found = knownIds().find((item) => item.id === id.toUpperCase());
+  if (!found || (found.pass && found.pass !== await sha(pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match a record made here."; return; }
+  enterAs(found.id);
 });
 document.getElementById("logout")?.addEventListener("click", () => {
   sessionStorage.removeItem("atlas-open");
   who();
 });
-document.getElementById("show-owner")?.addEventListener("click", () => { document.getElementById("owner-gate").hidden = false; });
-document.getElementById("owner-gate")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (await sha(document.getElementById("owner-pass").value) !== OWNER_HASH) { document.getElementById("welcome-note").textContent = "That is not the owner passphrase."; return; }
-  const text = currentCopy();
-  document.getElementById("copy-title").value = text.title || "";
-  document.getElementById("copy-body").value = (text.paragraphs || []).join("\n\n");
-  document.getElementById("owner-edit").hidden = false;
-});
-document.getElementById("owner-edit")?.addEventListener("submit", async (event) => {
+document.getElementById("owner-edit")?.addEventListener("submit", (event) => {
   event.preventDefault();
   const next = { title: document.getElementById("copy-title").value.trim() || "What this is", paragraphs: document.getElementById("copy-body").value.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean) };
-  localStorage.setItem("meaning-atlas-copy", JSON.stringify(next));
-  const token = document.getElementById("owner-token").value.trim();
-  if (!token) { document.getElementById("welcome-note").textContent = "Saved on this browser. Add a GitHub token to publish it for everyone."; return; }
-  const path = "js/copy.json";
-  const api = "https://api.github.com/repos/Darkstone007/meaning-atlas/contents/" + path;
-  const headers = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" };
-  const current = await fetch(api, { headers }).then((response) => response.json());
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(next, null, 2) + "\n")));
-  const saved = await fetch(api, { method: "PUT", headers, body: JSON.stringify({ message: "Update the project text", content, sha: current.sha, branch: "main" }) });
-  document.getElementById("welcome-note").textContent = saved.ok ? "Published. The live site updates in about a minute." : "Saved here. GitHub did not accept that token.";
+  localStorage.setItem("meaning-atlas-copy-v2", JSON.stringify(next));
+  document.getElementById("owner-note").textContent = "Saved on this browser.";
+});
+document.getElementById("owner-leave")?.addEventListener("click", () => {
+  sessionStorage.removeItem("atlas-owner");
+  who();
+});
+document.getElementById("clear-search")?.addEventListener("click", () => {
+  document.getElementById("search").value = "";
+  renderWeb();
+});
+document.querySelectorAll("#add input[type=file]").forEach((input) => {
+  input.addEventListener("change", () => {
+    const host = document.getElementById("previews");
+    const name = input.name;
+    host.querySelector(`[data-file="${name}"]`)?.remove();
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 1_500_000) { input.value = ""; document.getElementById("add-note").textContent = "That file is over 1.5 MB."; return; }
+    const box = document.createElement("p");
+    box.dataset.file = name;
+    box.textContent = `${name}: ${file.name}`;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn";
+    remove.textContent = "Remove";
+    remove.onclick = () => { input.value = ""; box.remove(); };
+    box.append(remove);
+    host.append(box);
+  });
 });
 document.getElementById("shelf-search")?.addEventListener("input", renderShelves);
 setupLabels();

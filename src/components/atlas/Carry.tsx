@@ -219,17 +219,13 @@ export function Carry() {
       <section className="carry-gate">
         <div className="carry-card">
           <p className="carry-eyebrow">Meaning Atlas</p>
-          <h1>Log in</h1>
-          <p className="carry-lede">This is the entrance. Log in with your ID, make one, or look around as a guest.</p>
-          {gate === "return" || gate === "home" ? (
-            <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
-              <label>ID<input name="id" required placeholder="U-0000" autoComplete="username" /></label>
-              <label>Passphrase<input name="pass" type="password" required autoComplete="current-password" /></label>
-              <button className="carry-primary" type="submit">Log in</button>
-              <button type="button" onClick={() => setGate("create")}>Make an ID</button>
-              <button type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
-            </form>
-          ) : null}
+          <h1>Meaning Atlas</h1>
+          <p className="carry-lede">Choose a word to discover what it means to someone.</p>
+          <div className="carry-stack">
+            <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Explore as a guest</button>
+            <button type="button" onClick={() => setGate("return")}>I have an ID</button>
+            <button type="button" onClick={() => setGate("create")}>Make an ID</button>
+          </div>
           {gate === "create" ? (
             <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "create", passphrase: String(data.get("pass")) }); }}>
               <label>Choose a passphrase<input name="pass" type="password" minLength={4} required autoComplete="new-password" /></label>
@@ -342,10 +338,8 @@ function ProjectInfo() {
     <section className="carry-concept">
       <p className="carry-eyebrow">Meaning Atlas</p>
       <h2>What this is</h2>
-      <p>Meaning Atlas is a place to follow a word into the account around it: how someone uses it, who they use it with, where it comes from for them, and a picture, voice, or video only if they gave one.</p>
-      <p>Each word belongs to one language. If they also use it in other languages, that is written beside the word. It does not become another shelf. Massa is Wolof. Čist račun - duga ljubav is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples, not survey findings. The other three are writings that were cleared to be shown.</p>
-      <p>The web holds words, not people. Press a word and the survey answers appear underneath. Press it again and this note returns. A dashed line means two words were given the same label. Turning the web does not measure how close two cultures are. People stay hidden unless they choose to show an ID.</p>
-      <p>Labels are offered from what was written, and nothing is applied until someone chooses it. That follows Boehner, DePaula, Dourish and Sengers, “How emotion is made and measured” (2007), and Johanna Drucker, “Humanities approaches to graphical display” (2011).</p>
+      <p>The current website is a proof of concept for Meaning Atlas. I wanted to show how a word can open into someone’s personal experience, including what it means to them, how they use it, and the emotions or memories attached to it. Visitors can explore the map, search for words, and select them to read the accounts behind them. The connections show where people have used similar labels for feelings, contexts, or intentions, while still keeping their individual explanations visible.</p>
+      <p>With the wider project, I want to explore what we miss when we translate a word without understanding the person or context behind it. Meaning Atlas would become an interactive installation where people can explore these accounts and contribute their own. I am considering a projected map alongside VR, where others can see an avatar interacting with the nodes, and a possible floor projection that visitors can explore separately. People would also be able to scan a QR code and add words through their phones. The aim is to let people find connections across their experiences while leaving room for meanings that are different or difficult to explain.</p>
     </section>
   );
 }

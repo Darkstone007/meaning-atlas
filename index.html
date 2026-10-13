@@ -7,34 +7,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/atlas.css?v=20261013d">
+  <link rel="stylesheet" href="css/atlas.css?v=20261013e">
 </head>
 <body>
   <section id="welcome" class="gate">
     <div class="card">
       <div class="eyebrow">Meaning Atlas</div>
-      <h1>Log in</h1>
-      <p class="lede">This is the entrance. Log in with your ID, make one, or look around as a guest.</p>
+      <h1>Meaning Atlas</h1>
+      <p class="lede">Choose a word to discover what it means to someone. You do not need to understand the language.</p>
+      <button class="btn primary" id="guest" type="button">Explore as a guest</button>
       <form id="login-form" class="stack">
-        <label>ID<input id="login-id" placeholder="U-0000" autocomplete="username"></label>
+        <label>Already have an ID<input id="login-id" placeholder="Your ID" autocomplete="username"></label>
         <label>Passphrase<input id="login-pass" type="password" autocomplete="current-password"></label>
-        <button class="btn primary" type="submit">Log in</button>
+        <button class="btn" type="submit">Log in</button>
       </form>
-      <div class="stack" id="welcome-choices">
-        <button class="btn" id="make" type="button">Make an ID</button>
-        <button class="btn" id="guest" type="button">Enter as a guest</button>
-        <button class="btn" id="show-owner" type="button">Owner</button>
-      </div>
-      <form id="owner-gate" class="stack" hidden>
-        <label>Owner passphrase<input id="owner-pass" type="password"></label>
-        <button class="btn primary" type="submit">Open the text</button>
-      </form>
-      <form id="owner-edit" class="stack" hidden>
-        <label>Title<input id="copy-title"></label>
-        <label>What the site is saying<textarea id="copy-body" rows="12"></textarea></label>
-        <label>GitHub token, so everyone sees the change<input id="owner-token" type="password" placeholder="Leave empty to save only on this browser"></label>
-        <button class="btn primary" type="submit">Save the project text</button>
-      </form>
+      <button class="btn" id="make" type="button">Make an ID</button>
       <p class="note" id="welcome-note"></p>
     </div>
   </section>
@@ -45,7 +32,7 @@
         <button type="button" data-view="web" class="active">Word web</button>
         <button type="button" data-view="shelves" id="nav-shelves">Shelves</button>
         <button type="button" data-view="add" id="nav-add">Add a word</button>
-        <button type="button" data-view="account" id="nav-account">Your account</button>
+        <button type="button" data-view="account" id="nav-account">Your words</button>
       </nav>
       <div class="who"><span class="pill" id="who">Come in</span></div>
     </header>
@@ -54,6 +41,7 @@
       <section id="view-web" hidden>
         <div class="tools">
           <label class="grow">Search<input id="search" type="search" placeholder="Word, language or meaning"></label>
+          <button class="btn" id="clear-search" type="button">Clear search</button>
           <label>Similarity layer
             <select id="layer">
               <option value="emotion">Emotion</option>
@@ -63,21 +51,25 @@
             </select>
           </label>
         </div>
-        <p class="legend">Drag the web, or use the controls under it. Only words are here. Press a word for its meanings. Press it again for the project.</p>
-        <div id="stage" class="stage"></div>
-        <div class="controls">
-          <label>Rotate<input id="yaw" type="range" min="-180" max="180" value="24"></label>
-          <label>Tilt<input id="pitch" type="range" min="-55" max="55" value="16"></label>
-          <button class="btn" id="reset-view" type="button">Reset</button>
+        <p class="legend" id="search-note">Choose a word to discover what it means to someone.</p>
+        <div class="map-row">
+          <div>
+            <div id="stage" class="stage"></div>
+            <div class="controls">
+              <label>Rotate<input id="yaw" type="range" min="-180" max="180" value="24"></label>
+              <label>Tilt<input id="pitch" type="range" min="-55" max="55" value="16"></label>
+              <button class="btn" id="reset-view" type="button">Reset</button>
+            </div>
+          </div>
+          <aside id="panel" class="panel-card"></aside>
         </div>
-        <article id="under"></article>
       </section>
       <section id="view-shelves" hidden>
         <label class="grow">Search<input id="shelf-search" type="search" placeholder="Language, word or meaning"></label>
         <div id="shelves"></div>
       </section>
       <section id="view-account" hidden>
-        <h2>Your account</h2>
+        <h2>Your words</h2>
         <p class="lede">The words you posted. Edit one, or log out and return to the login page.</p>
         <button class="btn" id="logout" type="button">Log out</button>
         <div id="mine"></div>
@@ -85,26 +77,35 @@
       <section id="view-add" hidden>
         <form id="add" class="form">
           <h2>Add what it means to you</h2>
-          <p class="lede">One language for the word. If you also use it in other languages, say so beside it. A picture, a voice, or a video is optional. If you leave one empty, nothing blank is shown.</p>
+          <p class="lede">Start with the word, one language, what it means to you, and an example. That is enough. The rest is optional. This does not need to be a dictionary definition.</p>
           <div class="two">
-            <label>Word<input name="expression" required maxlength="120"></label>
-            <label>One language<input name="language" required maxlength="80"></label>
+            <label>Word <span class="req">Required</span><input name="expression" required maxlength="120"></label>
+            <label>One language <span class="req">Required</span><input name="language" required maxlength="80"></label>
           </div>
-          <label>Also used in other languages<input name="also" placeholder="Separate with ;"></label>
-          <label>What languages or ways of speaking do you use, and who do you use them with?<textarea name="languagePractice"></textarea></label>
-          <label>Where does this expression come from for you?<textarea name="origin"></textarea></label>
-          <label>What does it mean to you?<textarea name="meaning" required></textarea></label>
-          <label>How would you use it? An example, and who you would be speaking to.<textarea name="example"></textarea></label>
-          <label>How would you explain it, and what changes?<textarea name="rephrasing"></textarea></label>
-          <label>Does who you are around change whether you use it?<textarea name="withheld"></textarea></label>
-          <label>Does changing how you speak affect being yourself?<textarea name="identity"></textarea></label>
-          <label>When an expression is unfamiliar, what do you usually do?<textarea name="listenerPractice"></textarea></label>
-          <div class="uploads">
-            <label>Image<input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
-            <label>Audio<input name="audio" type="file" accept="audio/*"></label>
-            <label>Video<input name="video" type="file" accept="video/mp4,video/webm"></label>
-          </div>
-          <p class="legend">Choose a label, add your own, or accept one noticed in what you wrote.</p>
+          <label>What it means to you <span class="req">Required</span><textarea name="meaning" required></textarea></label>
+          <label>An example of how you use it <span class="opt">Optional</span><textarea name="example"></textarea></label>
+          <details>
+            <summary>More about the word, if you want</summary>
+            <label>Also used in other languages <span class="opt">Optional</span><input name="also" placeholder="Separate with ;"></label>
+            <label>Languages you use, and who you use them with <span class="opt">Optional</span><textarea name="languagePractice"></textarea></label>
+            <label>Where it comes from for you <span class="opt">Optional</span><textarea name="origin"></textarea></label>
+            <label>How you would explain it <span class="opt">Optional</span><textarea name="rephrasing"></textarea></label>
+            <label>What changes when you explain it <span class="opt">Optional</span><textarea name="change"></textarea></label>
+            <label>Who you are around <span class="opt">Optional</span><textarea name="withheld"></textarea></label>
+            <label>Being yourself <span class="opt">Optional</span><textarea name="identity"></textarea></label>
+            <label>When an expression is unfamiliar <span class="opt">Optional</span><textarea name="listenerPractice"></textarea></label>
+          </details>
+          <details>
+            <summary>Picture, voice, or video, if you want</summary>
+            <p class="legend">JPEG, PNG, WebP or GIF. Audio as MP3, WAV or OGG. Video as MP4 or WebM. Each file up to about 1.5 MB. It appears only on your account, and only if you leave a file here. Nothing blank is shown.</p>
+            <div class="uploads">
+              <label>Image <span class="opt">Optional</span><input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+              <label>Audio <span class="opt">Optional</span><input name="audio" type="file" accept="audio/*"></label>
+              <label>Video <span class="opt">Optional</span><input name="video" type="file" accept="video/mp4,video/webm"></label>
+            </div>
+            <div id="previews"></div>
+          </details>
+          <p class="legend">A label is only added if you accept it. A suggestion is a guess from a word you typed, not a fact about you.</p>
           <div id="noticed" class="checks"></div>
           <div id="labels"></div>
           <button class="btn primary" type="submit">Place it on the web</button>
@@ -113,7 +114,21 @@
       </section>
     </main>
   </div>
-  <script src="js/data.js?v=20261013d"></script>
-  <script src="js/site.js?v=20261013d"></script>
+  <section id="owner-page" class="gate" hidden>
+    <div class="card">
+      <div class="eyebrow">Owner</div>
+      <h1>The project text</h1>
+      <p class="lede">This page is not linked from the site. It opens only for your ID.</p>
+      <form id="owner-edit" class="stack">
+        <label>Title<input id="copy-title"></label>
+        <label>What this is<textarea id="copy-body" rows="14"></textarea></label>
+        <button class="btn primary" type="submit">Save</button>
+      </form>
+      <button class="btn" id="owner-leave" type="button">Leave</button>
+      <p class="note" id="owner-note"></p>
+    </div>
+  </section>
+  <script src="js/data.js?v=20261013e"></script>
+  <script src="js/site.js?v=20261013e"></script>
 </body>
 </html>
