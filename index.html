@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/atlas.css?v=20261013h">
+  <link rel="stylesheet" href="css/atlas.css?v=20261013i">
 </head>
 <body>
   <section id="welcome" class="gate">
@@ -82,9 +82,14 @@
         <div id="profile"></div>
       </section>
       <section id="view-add" hidden>
+        <div id="guest-gate" hidden>
+          <h2>Make an ID first</h2>
+          <p class="lede">A guest cannot add a word. Make an ID. For now the passphrase is that user ID. You can log in with the user ID and that passphrase, unless you change the passphrase. The ID is not shown on the main page.</p>
+          <button class="btn primary" id="make-from-add" type="button">Make an ID</button>
+        </div>
         <form id="add" class="form">
           <h2>Add what it means to you</h2>
-          <p class="lede" id="form-lede">The word, the language, the meaning, an example, and what it carries are required. Your writing keeps your meaning. A label is separate: it is the name a dashed line can use. Pick at least one label for emotion, one for context, and one for intention.</p>
+          <p class="lede" id="form-lede">The word, the language, the meaning, an example, and what it carries are required. There won't be any changes to your meaning or text and it will be displayed as written. On the other hand a label is separate, it is the name a dashed line can use. Pick at least one label for emotion, one for context, and one for intention.</p>
           <fieldset>
             <legend>The expression</legend>
             <div class="two">
@@ -125,7 +130,7 @@
             </div>
             <div id="previews"></div>
           </details>
-          <p class="legend" id="label-note">Pick at least one emotion label, one context label, and one intention label. The writing above is your meaning. The label is only the name of the line. A suggested label is offered because a word you typed matches it. It is not added until you tick it.</p>
+          <p class="legend" id="label-note">A label below is to further categories for easier understanding for those around and more than one label can be picked. If none of those match you may add your own labels for each.</p>
           <div id="noticed" class="checks"></div>
           <div id="labels"></div>
           <button class="btn primary" type="submit">Place it on the web</button>
@@ -161,7 +166,7 @@
       <p class="note" id="owner-note"></p>
     </div>
   </section>
-  <script src="js/data.js?v=20261013h"></script>
-  <script src="js/site.js?v=20261013h"></script>
+  <script src="js/data.js?v=20261013i"></script>
+  <script src="js/site.js?v=20261013i"></script>
 </body>
 </html>

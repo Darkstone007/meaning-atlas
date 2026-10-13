@@ -37,6 +37,8 @@ let view = "home";
 let selected = null;
 let selectedLine = null;
 let panelMode = "start";
+let ownerLanguage = "all";
+let ownerAccount = "all";
 let yaw = 24;
 let pitch = 16;
 let drag = null;
@@ -106,6 +108,13 @@ function show(name) {
   if (name === "web") renderWeb();
   if (name === "shelves") renderShelves();
   if (name === "account") renderAccount();
+  if (name === "add") {
+    const guest = !state.session || state.session.id === "guest";
+    const form = document.getElementById("add");
+    const gate = document.getElementById("guest-gate");
+    if (form) form.hidden = guest;
+    if (gate) gate.hidden = !guest;
+  }
   if (name === "profile") renderProfile();
 }
 function projectHtml() {
@@ -331,12 +340,11 @@ function bit(title, text) {
   return `<div class="bit"><h4>${esc(title)}</h4><p>${esc(text)}</p></div>`;
 }
 function meaningHtml(record, number) {
-  const badge = record.source === "example" ? `<span class="badge">Illustrative example</span>` : "";
   const video = youtubeId(record.youtube);
   const media = `${record.image ? `<img alt="" src="${record.image}">` : ""}${record.audio ? `<audio controls src="${record.audio}"></audio>` : ""}${record.video ? `<video controls src="${record.video}"></video>` : ""}${video ? `<div class="video-frame"><iframe src="https://www.youtube-nocookie.com/embed/${video}" title="Playback" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>` : ""}`;
   return `<section class="account" id="acct-${record.id}">
     <button type="button" class="btn back-top" data-top="1">Back to accounts</button>
-    <h3>${esc(accountName(record, number || 1))}</h3>${badge}
+    <h3>${esc(accountName(record, number || 1))}</h3>${record.source === "example" ? `<span class="badge">Illustrative example</span>` : ""}
     ${bit("Meaning", record.meaning)}
     ${bit("Example", record.example)}
     ${bit("Emotion", record.feeling)}
@@ -411,23 +419,59 @@ function renderShelves() {
   const page = words.find((record) => record.id === reading);
   if (page) spread.querySelector("#book-page").innerHTML = meaningHtml(page);
 }
+function extraLabels() {
+  try { return JSON.parse(localStorage.getItem("meaning-atlas-labels") || "{}") || {}; } catch { return {}; }
+}
+function labelsFor(layer) {
+  const saved = extraLabels()[layer] || [];
+  const used = state.records.flatMap((record) => record.tags?.[layer] || []);
+  const seen = new Set();
+  return [...VOCAB[layer], ...saved, ...used].filter((value) => {
+    const key = String(value || "").trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a, b) => a.localeCompare(b, "en"));
+}
+function rememberLabel(layer, value) {
+  const clean = String(value || "").trim();
+  if (!clean || VOCAB[layer].some((item) => item.toLowerCase() === clean.toLowerCase())) return;
+  const saved = extraLabels();
+  saved[layer] = saved[layer] || [];
+  if (!saved[layer].some((item) => item.toLowerCase() === clean.toLowerCase())) saved[layer].push(clean);
+  localStorage.setItem("meaning-atlas-labels", JSON.stringify(saved));
+}
 function setupLabels() {
   const host = document.getElementById("labels");
-  Object.entries(VOCAB).forEach(([layer, values]) => {
+  const checked = new Set([...host.querySelectorAll("input:checked")].map((input) => input.name + "=" + input.value));
+  host.replaceChildren();
+  Object.keys(VOCAB).forEach((layer) => {
     const field = document.createElement("fieldset");
     const legend = document.createElement("legend");
     legend.textContent = layer;
     field.append(legend);
     const chips = document.createElement("div");
     chips.className = "checks";
-    values.forEach((value) => {
+    labelsFor(layer).forEach((value) => {
       const label = document.createElement("label");
-      label.innerHTML = `<input type="checkbox" name="tag-${layer}" value="${value}"> ${value}`;
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.name = "tag-" + layer;
+      input.value = value;
+      input.checked = checked.has(input.name + "=" + value);
+      label.append(input, document.createTextNode(" " + value));
       chips.append(label);
     });
     const own = document.createElement("input");
     own.name = "own-" + layer;
     own.placeholder = "Add your own, separated by ;";
+    own.addEventListener("change", () => {
+      own.value.split(";").map((item) => item.trim()).filter(Boolean).forEach((value) => {
+        rememberLabel(layer, value);
+        checked.add("tag-" + layer + "=" + value);
+      });
+      setupLabels();
+    });
     field.append(chips, own);
     host.append(field);
   });
@@ -449,7 +493,7 @@ stage.onpointerup = () => { drag = null; };
 document.getElementById("add").onsubmit = async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  if (!state.session) { document.getElementById("add-note").textContent = "Come in from the home page first."; return; }
+  if (!state.session || state.session.id === "guest") { document.getElementById("add-note").textContent = "Make an ID before you add a word."; show("add"); return; }
   ["meaning", "example", "emotion", "context", "intention"].forEach((name) => {
     const error = document.querySelector(`[data-for="${name}"]`);
     const missing = !form[name].value.trim();
@@ -499,7 +543,7 @@ document.getElementById("add").onsubmit = async (event) => {
   Object.keys(VOCAB).forEach((layer) => {
     record.tags[layer] = [...form.querySelectorAll(`[name="tag-${layer}"]:checked`)].map((input) => input.value);
     const own = form.querySelector(`[name="own-${layer}"]`);
-    if (own && own.value.trim()) record.tags[layer].push(...own.value.split(";").map((item) => item.trim()).filter(Boolean));
+    if (own && own.value.trim()) own.value.split(";").map((item) => item.trim()).filter(Boolean).forEach((value) => { rememberLabel(layer, value); record.tags[layer].push(value); });
   });
   if (editingId) {
     const index = state.records.findIndex((item) => item.id === editingId && item.userId === state.session.id);
@@ -513,6 +557,7 @@ document.getElementById("add").onsubmit = async (event) => {
     editingId = null;
   } else state.records.push(record);
   save();
+  setupLabels();
   form.reset();
   selected = norm(record.expression) + "|" + norm(record.language);
   show("web");
@@ -557,25 +602,31 @@ function renderProfile() {
   if (!host) return;
   host.replaceChildren();
   if (!state.session || state.session.id === "guest") {
-    host.innerHTML = `<p>You are a guest, so there is no ID yet. Log out and choose Make an ID. The site gives you one ID, and that ID is the passphrase.</p>`;
+    host.innerHTML = `<p class="account-copy">You are a guest, so there is no ID yet. Make an ID before you add a word. For now the passphrase is that user ID. You can log in with the user ID and that passphrase, unless you change it. The ID is not shown on the main page.</p><button class="btn primary" id="make-inline" type="button">Make an ID</button>`;
+    host.querySelector("#make-inline").onclick = () => createId();
     return;
   }
   const known = knownIds().find((item) => item.id === state.session.id) || {};
   const passIsId = known.passIsId === true;
-  host.innerHTML = `<p class="legend">${passIsId ? "Your passphrase is this ID. Write it down. It is not shown on the map, and it stays here when you need it." : "This is your ID. Your passphrase is the one you set. The ID is not shown on the map."}</p>
+  host.innerHTML = `<h3>Your ID</h3>
+    <p class="account-copy">This ID is not shown on the main page. Write it down. You need it to log in.</p>
     <p class="account-id" id="shown-id"></p>
     <button class="btn" id="copy-id" type="button">Copy the ID</button>
+    <h3>Passphrase</h3>
+    <p class="account-copy">${passIsId ? "Right now your passphrase is your user ID. Log in with this user ID and this passphrase. You can change it below. Changing it is optional." : "Your passphrase is the one you set. Your user ID stays the same. Changing the passphrase again is optional."}</p>
     <form id="pass-form" class="stack">
-      <label>New passphrase<input name="pass" type="password" autocomplete="new-password" minlength="8"></label>
-      <label>Repeat the passphrase<input name="again" type="password" autocomplete="new-password"></label>
+      <label>New passphrase <span class="opt">Optional</span><input name="pass" type="password" autocomplete="new-password" minlength="8"></label>
+      <label>Repeat the passphrase <span class="opt">Optional</span><input name="again" type="password" autocomplete="new-password"></label>
       <button class="btn" type="submit">Update passphrase</button>
     </form>
+    <h3>Optional</h3>
+    <p class="account-copy">Name, contact, and the choices below are optional. They stay on this account. They are not shown on the main page.</p>
     <form id="profile-form" class="stack">
-      <label>Name<input name="name" maxlength="80" placeholder="Only on this account"></label>
-      <label class="legend"><input name="contact" type="checkbox"> I want to be contacted</label>
-      <label>How to reach you<input name="contactHow" maxlength="160" placeholder="Only if you want to be contacted"></label>
-      <label class="legend"><input name="reveal" type="checkbox"> Show my ID beside my words</label>
-      <label class="legend"><input name="similar" type="checkbox"> Tell me when a word has a similar meaning or intention</label>
+      <label>Name <span class="opt">Optional</span><input name="name" maxlength="80" placeholder="Only on this account"></label>
+      <label class="account-copy"><input name="contact" type="checkbox"> I want to be contacted. <span class="opt">Optional</span></label>
+      <label>How to reach you <span class="opt">Optional</span><input name="contactHow" maxlength="160" placeholder="Only if you want to be contacted"></label>
+      <label class="account-copy"><input name="reveal" type="checkbox"> Show my ID beside my words. <span class="opt">Optional</span></label>
+      <label class="account-copy"><input name="similar" type="checkbox"> Tell me when a word has a similar meaning or intention. <span class="opt">Optional</span></label>
       <button class="btn primary" type="submit">Save account</button>
     </form>
     <p class="note" id="profile-note"></p>`;
@@ -606,7 +657,7 @@ function renderProfile() {
     const reveal = Boolean(data.get("reveal"));
     state.records.forEach((record) => { if (record.userId === state.session.id) record.reveal = reveal; });
     saveProfile({ name: String(data.get("name") || "").trim(), contact: Boolean(data.get("contact")), contactHow: String(data.get("contactHow") || "").trim(), reveal, similar: Boolean(data.get("similar")) });
-    document.getElementById("profile-note").textContent = "Account saved on this browser.";
+    show("web");
   };
 }
 function renderAccount() {
@@ -693,9 +744,36 @@ function openOwner() {
   document.getElementById("copy-title").value = text.title || "";
   document.getElementById("copy-body").value = (text.paragraphs || []).join("\n\n");
   document.getElementById("copy-how").value = (text.how || []).join("\n");
+  renderOwnerWords();
+  who();
+}
+function renderOwnerWords() {
   const host = document.getElementById("owner-words");
   host.replaceChildren();
-  state.records.forEach((record) => {
+  const languages = [...new Set(state.records.map((record) => record.language))].sort((a, b) => a.localeCompare(b, "en"));
+  const bar = document.createElement("div");
+  bar.className = "owner-filters";
+  const langLabel = document.createElement("label");
+  langLabel.textContent = "Language";
+  const lang = document.createElement("select");
+  lang.append(new Option("All languages", "all"));
+  languages.forEach((language) => lang.append(new Option(language, language)));
+  lang.value = ownerLanguage;
+  langLabel.append(lang);
+  const accountLabel = document.createElement("label");
+  accountLabel.textContent = "Account";
+  const account = document.createElement("select");
+  const pool = state.records.filter((record) => ownerLanguage === "all" || record.language === ownerLanguage).slice().sort((a, b) => a.expression.localeCompare(b.expression, "en") || a.language.localeCompare(b.language, "en"));
+  account.append(new Option("All accounts, alphabetical", "all"));
+  pool.forEach((record, index) => account.append(new Option(`${record.expression} · ${record.language} · Account ${index + 1}`, record.id)));
+  if (ownerAccount !== "all" && !pool.some((record) => record.id === ownerAccount)) ownerAccount = "all";
+  account.value = ownerAccount;
+  accountLabel.append(account);
+  lang.onchange = () => { ownerLanguage = lang.value; ownerAccount = "all"; renderOwnerWords(); };
+  account.onchange = () => { ownerAccount = account.value; renderOwnerWords(); };
+  bar.append(langLabel, accountLabel);
+  host.append(bar);
+  pool.filter((record) => ownerAccount === "all" || record.id === ownerAccount).forEach((record) => {
     const form = document.createElement("form");
     form.className = "owner-word stack";
     const title = document.createElement("h3");
@@ -725,22 +803,24 @@ function openOwner() {
       record.intention = form.intention.value.trim();
       record.youtube = form.youtube.value.trim();
       save();
-      title.textContent = `${record.expression} · ${record.language}`;
       document.getElementById("owner-note").textContent = "Saved " + record.expression + " on this browser.";
+      renderOwnerWords();
     };
     host.append(form);
   });
-  who();
 }
-document.getElementById("guest")?.addEventListener("click", () => enterAs("guest"));
-document.getElementById("make")?.addEventListener("click", async () => {
+async function createId() {
   const id = freshId();
   const list = knownIds();
   list.push({ id, pass: await sha(id), passIsId: true, name: "", contact: false, contactHow: "", similar: false, reveal: false });
   localStorage.setItem(KEY + "-ids", JSON.stringify(list));
-  document.getElementById("welcome-note").textContent = "Your ID is also your passphrase. Write this down: " + id;
+  const note = document.getElementById("welcome-note");
+  if (note) note.textContent = "Your ID was saved on your account. It is not shown on the main page. For now the passphrase is that user ID.";
   enterAs(id, "profile");
-});
+}
+document.getElementById("guest")?.addEventListener("click", () => enterAs("guest"));
+document.getElementById("make")?.addEventListener("click", () => createId());
+document.getElementById("make-from-add")?.addEventListener("click", () => createId());
 document.getElementById("login-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = document.getElementById("login-id").value.trim();
