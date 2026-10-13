@@ -189,6 +189,13 @@ async function publishWord(record) {
   }
   await touchRev();
 }
+// Take one of this person's words off the shared copy, so other accounts stop seeing it.
+async function unpublishWord(id) {
+  const ids = ((await readBlob("word-ids")) || []).filter((item) => item !== id);
+  await writeBlob("word-ids", ids);
+  await kvSet("w-" + id + "-n", "0");
+  await touchRev();
+}
 async function publishAccount(account) {
   const body = { ...account };
   delete body._crud;
@@ -584,6 +591,7 @@ function renderPanel(nodes) {
   panel.querySelectorAll("[data-top]").forEach((button) => {
     button.onclick = () => document.getElementById("account-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  wireDelete(panel);
 }
 // "Account 1" unless that person allowed their ID to be shown.
 function accountName(record, number) {
@@ -623,6 +631,7 @@ function meaningHtml(record, number) {
     ${bit("When an expression is unfamiliar", record.listenerPractice)}
     ${bit("Languages you use", record.languagePractice)}
     ${media}
+    ${state.session && state.session.id !== "guest" && record.userId === state.session.id ? `<button type="button" class="btn" data-delete="${esc(record.id)}">Delete this word</button>` : ""}
   </section>`;
 }
 // One book spine per language. Opening a book lists its words in alphabetical order.
@@ -687,6 +696,7 @@ function renderShelves() {
   spread.querySelectorAll("[data-top]").forEach((button) => {
     button.onclick = () => { reading = null; openBook = null; renderShelves(); };
   });
+  wireDelete(spread);
 }
 // Labels people added themselves, kept in this browser.
 function extraLabels() {
@@ -851,18 +861,58 @@ document.getElementById("add").onsubmit = async (event) => {
   selected = norm(record.expression) + "|" + norm(record.language);
   show("web");
 };
-// Come in as a guest or with an ID.
-// The map stays closed until the shared words have arrived, so this visit does not open on an old copy.
-async function enterAs(id, next) {
-  const note = document.getElementById("welcome-note");
-  if (note && next !== "profile") note.textContent = "Bringing the words in.";
+// Delete is only for a word this person posted. If the shared copy does not drop it, this browser keeps it too.
+async function deleteWord(record) {
+  if (!state.session || state.session.id === "guest" || record.userId !== state.session.id) return;
+  const note = document.getElementById("words-note");
+  try {
+    await enqueue(() => unpublishWord(record.id));
+  } catch {
+    const text = "This word was not deleted for the other accounts. Nothing was changed.";
+    if (note) note.textContent = text;
+    const story = document.querySelector("#panel .story, #book-page");
+    if (story && view !== "account") {
+      let line = story.querySelector(".delete-fail");
+      if (!line) {
+        line = document.createElement("p");
+        line.className = "note delete-fail";
+        story.append(line);
+      }
+      line.textContent = text;
+    }
+    return;
+  }
+  state.records = state.records.filter((item) => item.id !== record.id);
+  if (editingId === record.id) editingId = null;
+  if (reading === record.id) reading = null;
+  const key = norm(record.expression) + "|" + norm(record.language);
+  if (selected === key && !state.records.some((item) => norm(item.expression) + "|" + norm(item.language) === key)) {
+    selected = null;
+    panelMode = "start";
+  }
+  try { save(); } catch { /* The shared copy already dropped it. */ }
+  if (note) note.textContent = "";
+  if (view === "account") renderAccount();
+  if (view === "web") renderWeb();
+  if (view === "shelves") renderShelves();
+}
+function wireDelete(root) {
+  root.querySelectorAll("[data-delete]").forEach((button) => {
+    button.onclick = () => {
+      const record = state.records.find((item) => item.id === button.dataset.delete && item.userId === state.session?.id);
+      if (record) deleteWord(record);
+    };
+  });
+}
+// Come in as a guest or with an ID. The map opens straight away.
+function enterAs(id, next) {
   const known = knownIds().find((item) => item.id === id) || {};
   state.session = { id, reveal: Boolean(known.reveal), name: known.name || "", contact: Boolean(known.contact), contactHow: known.contactHow || "", similar: Boolean(known.similar), passIsId: known.passIsId === true };
   sessionStorage.setItem("atlas-open", "1");
   save();
-  try { await syncShared(false); } catch { /* Open with the words already on this browser. */ }
   who();
   show(next || "web");
+  syncShared(false).catch(() => {});
 }
 // IDs made on this browser, with the hashed passphrase and the account choices.
 function knownIds() {
@@ -977,6 +1027,12 @@ function renderAccount() {
       show("add");
     };
     row.append(button);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "btn";
+    remove.textContent = "Delete";
+    remove.onclick = () => deleteWord(record);
+    row.append(remove);
     host.append(row);
   });
   const similar = document.getElementById("similar");
@@ -1127,7 +1183,7 @@ document.getElementById("login-form")?.addEventListener("submit", async (event) 
   try { await enqueue(() => pullAccounts()); } catch { /* try the ids stored on this browser */ }
   const found = knownIds().find((item) => item.id === id.toUpperCase() || item.id === id);
   const attempts = [await sha(pass), await sha(pass.toUpperCase())];
-  if (!found || (found.pass && !attempts.includes(found.pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match an account."; return; }
+  if (!found || (found.pass && !attempts.includes(found.pass))) { document.getElementById("welcome-note").textContent = "wrong details"; return; }
   enterAs(found.id);
 });
 document.getElementById("who")?.addEventListener("click", () => {
