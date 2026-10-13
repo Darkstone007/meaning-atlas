@@ -95,7 +95,7 @@ export function Carry() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [view, setView] = useState<"web" | "shelves" | "add" | "people">("web");
-  const [gate, setGate] = useState<"home" | "return" | "create" | "made">("home");
+  const [gate, setGate] = useState<"home" | "return" | "create" | "made">("return");
   const [madeId, setMadeId] = useState("");
   const [note, setNote] = useState("");
   const [query, setQuery] = useState("");
@@ -111,7 +111,7 @@ export function Carry() {
   async function refresh() {
     const response = await fetch("/api/atlas/entries");
     const data = await response.json();
-    if (data.profile) {
+    if (data.profile && sessionStorage.getItem("atlas-open") === "1") {
       setProfileId(data.profile.id);
       setRevealFlag(Boolean(data.profile.reveal));
     }
@@ -147,6 +147,7 @@ export function Carry() {
       setNote(data.error || "Could not come in.");
       return;
     }
+    sessionStorage.setItem("atlas-open", "1");
     if (body.kind === "create") {
       setMadeId(data.id);
       setGate("made");
@@ -218,21 +219,15 @@ export function Carry() {
       <section className="carry-gate">
         <div className="carry-card">
           <p className="carry-eyebrow">Meaning Atlas</p>
-          <h1>Welcome</h1>
-          <p className="carry-lede">Choose how you come in before the archive opens. A guest can look and add on this visit. An ID lets you come back, see what you posted, and edit it. Your ID stays hidden unless you later choose to show it.</p>
-          {gate === "home" ? (
-            <div className="carry-stack">
-              <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
-              <button type="button" onClick={() => setGate("return")}>Log in with an ID</button>
-              <button type="button" onClick={() => setGate("create")}>Make an ID</button>
-            </div>
-          ) : null}
-          {gate === "return" ? (
+          <h1>Log in</h1>
+          <p className="carry-lede">This is the entrance. Log in with your ID, make one, or look around as a guest.</p>
+          {gate === "return" || gate === "home" ? (
             <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
-              <label>Your ID<input name="id" required placeholder="U-0000" autoComplete="username" /></label>
+              <label>ID<input name="id" required placeholder="U-0000" autoComplete="username" /></label>
               <label>Passphrase<input name="pass" type="password" required autoComplete="current-password" /></label>
               <button className="carry-primary" type="submit">Log in</button>
-              <button type="button" onClick={() => setGate("home")}>Back</button>
+              <button type="button" onClick={() => setGate("create")}>Make an ID</button>
+              <button type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
             </form>
           ) : null}
           {gate === "create" ? (
@@ -273,7 +268,7 @@ export function Carry() {
         </nav>
         <div className="carry-who">
           {profileId ? <span>{reveal ? profileId : "ID hidden"}</span> : null}
-          {profileId ? <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { setProfileId(null); setGate("home"); setView("web"); })}>Log out</button> : null}
+          {profileId ? <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { sessionStorage.removeItem("atlas-open"); setProfileId(null); setGate("return"); setView("web"); })}>Log out</button> : null}
         </div>
       </header>
       {view === "web" ? (
@@ -334,7 +329,7 @@ export function Carry() {
           reveal={reveal}
           onToggle={async (next) => { await fetch("/api/atlas/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reveal: next }) }); setRevealFlag(next); await refresh(); }}
           onEdit={(entry) => { setEditing(entry); setView("add"); }}
-          onLeave={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { setProfileId(null); setGate("home"); setView("web"); })}
+          onLeave={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { sessionStorage.removeItem("atlas-open"); setProfileId(null); setGate("return"); setView("web"); })}
         />
       ) : null}
       {view === "add" ? <Add key={editing?.id || "new"} initial={editing} onDone={async () => { setEditing(null); await refresh(); setView("people"); }} /> : null}

@@ -40,6 +40,30 @@ let pitch = 16;
 let drag = null;
 let openBook = null;
 let reading = null;
+const OWNER_HASH = "a3b39f5277df6de836221ba3271b8f265f1810fdf9f48f98e402f0c724809c7d";
+let copy = {
+  title: "What this is",
+  paragraphs: [
+    "Meaning Atlas is a place to follow a word into the account around it: how someone uses it, who they use it with, where it comes from for them, and a picture, voice, or a video only if they gave one.",
+    "Each word belongs to one language. If it is also used in other languages, that is written beside it and does not make another shelf. Massa is Wolof. The proverb is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples, not survey findings.",
+    "The web holds words, not people. Press a word and the survey answers appear here. Press it again and this note returns. A dashed line is a shared label, not a cultural score. Turning the web does not measure closeness. People stay hidden unless they choose to show an ID.",
+  ],
+};
+let editingId = null;
+function esc(value) {
+  return String(value || "").replace(/&/g, "\u0026amp;").replace(/</g, "\u0026lt;").replace(/>/g, "\u0026gt;");
+}
+async function sha(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function currentCopy() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("meaning-atlas-copy") || "null");
+    if (saved && Array.isArray(saved.paragraphs)) return saved;
+  } catch { /* use the file */ }
+  return copy;
+}
 
 function load() {
   try {
@@ -73,17 +97,18 @@ function groups() {
 }
 function show(name) {
   view = name;
-  ["home", "web", "shelves", "add"].forEach((item) => { document.getElementById("view-" + item).hidden = item !== name; });
+  ["home", "web", "shelves", "add", "account"].forEach((item) => {
+    const node = document.getElementById("view-" + item);
+    if (node) node.hidden = item !== name;
+  });
   document.querySelectorAll("[data-view]").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
-  if (name === "home") renderHome();
   if (name === "web") renderWeb();
   if (name === "shelves") renderShelves();
+  if (name === "account") renderAccount();
 }
 function projectHtml() {
-  return `<p class="eyebrow">Meaning Atlas</p><h2>What this is</h2>
-  <p>Meaning Atlas is a place to follow a word into the account around it: how someone uses it, who they use it with, where it comes from for them, and a picture, voice, or video only if they gave one.</p>
-  <p>Each word belongs to one language. If it is also used in other languages, that is written beside it and does not make another shelf. Massa is Wolof. The proverb is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples, not survey findings.</p>
-  <p>The web holds words, not people. Press a word and the survey answers appear here. Press it again and this note returns. A dashed line is a shared label, not a cultural score. Turning the web does not measure closeness. People stay hidden unless they choose to show an ID.</p>`;
+  const text = currentCopy();
+  return `<p class="eyebrow">Meaning Atlas</p><h2>${esc(text.title || "What this is")}</h2>${(text.paragraphs || []).map((paragraph) => `<p>${esc(paragraph)}</p>`).join("")}`;
 }
 function renderHome() {
   const box = document.getElementById("view-home");
@@ -95,17 +120,13 @@ function renderHome() {
   document.getElementById("make")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
 }
 function who() {
-  const inside = Boolean(state.session);
+  const inside = sessionStorage.getItem("atlas-open") === "1";
   const welcome = document.getElementById("welcome");
   const app = document.getElementById("app");
   if (welcome) welcome.hidden = inside;
   if (app) app.hidden = !inside;
   const whoNode = document.getElementById("who");
-  if (whoNode) whoNode.textContent = inside ? "ID hidden" : "Welcome";
-  const shelves = document.getElementById("nav-shelves");
-  const add = document.getElementById("nav-add");
-  if (shelves) shelves.hidden = !inside;
-  if (add) add.hidden = !inside;
+  if (whoNode) whoNode.textContent = inside && state.session ? state.session.id : "Log in";
 }
 function renderWeb() {
   const list = groups();
@@ -253,8 +274,22 @@ document.getElementById("add").onsubmit = async (event) => {
     tags: { emotion: [], context: [], intention: [] },
     image: await file(form.image), audio: await file(form.audio), video: await file(form.video), source: "visitor",
   };
-  Object.keys(VOCAB).forEach((layer) => { record.tags[layer] = [...form.querySelectorAll(`[name="tag-${layer}"]:checked`)].map((input) => input.value); });
-  state.records.push(record);
+  Object.keys(VOCAB).forEach((layer) => {
+    record.tags[layer] = [...form.querySelectorAll(`[name="tag-${layer}"]:checked`)].map((input) => input.value);
+    const own = form.querySelector(`[name="own-${layer}"]`);
+    if (own && own.value.trim()) record.tags[layer].push(...own.value.split(";").map((item) => item.trim()).filter(Boolean));
+  });
+  if (editingId) {
+    const index = state.records.findIndex((item) => item.id === editingId && item.userId === state.session.id);
+    if (index >= 0) {
+      record.id = editingId;
+      record.image = record.image || state.records[index].image;
+      record.audio = record.audio || state.records[index].audio;
+      record.video = record.video || state.records[index].video;
+      state.records[index] = record;
+    }
+    editingId = null;
+  } else state.records.push(record);
   save();
   form.reset();
   selected = norm(record.expression) + "|" + norm(record.language);
@@ -274,26 +309,87 @@ document.querySelector("[name=meaning]").addEventListener("input", (event) => {
   });
 });
 function enterAs(id) {
-  state.session = { id: id || ("U-" + Math.random().toString(36).slice(2, 6).toUpperCase()), reveal: false };
+  state.session = { id, reveal: false };
+  sessionStorage.setItem("atlas-open", "1");
   save();
   who();
   show("web");
 }
-document.getElementById("guest")?.addEventListener("click", () => enterAs());
-document.getElementById("make")?.addEventListener("click", () => {
+function knownIds() {
+  const raw = JSON.parse(localStorage.getItem(KEY + "-ids") || "[]");
+  return raw.map((item) => (typeof item === "string" ? { id: item, pass: "" } : item));
+}
+function renderAccount() {
+  const host = document.getElementById("mine");
+  if (!host) return;
+  host.replaceChildren();
+  const mine = state.records.filter((record) => record.userId === state.session?.id).sort((a, b) => a.expression.localeCompare(b.expression, "en"));
+  if (!mine.length) { host.textContent = "You have not posted a word yet."; return; }
+  mine.forEach((record) => {
+    const row = document.createElement("article");
+    row.className = "book";
+    row.innerHTML = `<strong>${esc(record.expression)}</strong><span>${esc(record.language)}</span>`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn";
+    button.textContent = "Edit";
+    button.onclick = () => {
+      editingId = record.id;
+      const form = document.getElementById("add");
+      ["expression", "language", "also", "languagePractice", "origin", "meaning", "example", "rephrasing", "withheld", "identity", "listenerPractice"].forEach((name) => {
+        if (form[name]) form[name].value = record[name] || (name === "also" ? record.also || "" : "");
+      });
+      show("add");
+    };
+    row.append(button);
+    host.append(row);
+  });
+}
+document.getElementById("guest")?.addEventListener("click", () => enterAs("guest"));
+document.getElementById("make")?.addEventListener("click", async () => {
+  const pass = document.getElementById("login-pass").value;
+  if (pass.length < 4) { document.getElementById("welcome-note").textContent = "Choose a passphrase of at least 4 characters in the login form, then make an ID."; return; }
   const id = "U-" + Math.random().toString(36).slice(2, 6).toUpperCase();
-  const known = JSON.parse(localStorage.getItem(KEY + "-ids") || "[]");
-  localStorage.setItem(KEY + "-ids", JSON.stringify([...known, id]));
-  document.getElementById("welcome-note").textContent = "Your ID is " + id + ". Write it down, then you are in.";
+  const list = knownIds().filter((item) => item.id !== id);
+  list.push({ id, pass: await sha(pass) });
+  localStorage.setItem(KEY + "-ids", JSON.stringify(list));
+  document.getElementById("welcome-note").textContent = "Your ID is " + id + ". Write it down with the passphrase.";
   enterAs(id);
 });
-document.getElementById("show-login")?.addEventListener("click", () => { document.getElementById("login-form").hidden = false; });
-document.getElementById("login-form")?.addEventListener("submit", (event) => {
+document.getElementById("login-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = document.getElementById("login-id").value.trim().toUpperCase();
-  const known = JSON.parse(localStorage.getItem(KEY + "-ids") || "[]");
-  if (!known.includes(id)) { document.getElementById("welcome-note").textContent = "That ID is not on this browser."; return; }
+  const pass = document.getElementById("login-pass").value;
+  const found = knownIds().find((item) => item.id === id);
+  if (!found || (found.pass && found.pass !== await sha(pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match an ID made on this browser."; return; }
   enterAs(id);
+});
+document.getElementById("logout")?.addEventListener("click", () => {
+  sessionStorage.removeItem("atlas-open");
+  who();
+});
+document.getElementById("show-owner")?.addEventListener("click", () => { document.getElementById("owner-gate").hidden = false; });
+document.getElementById("owner-gate")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (await sha(document.getElementById("owner-pass").value) !== OWNER_HASH) { document.getElementById("welcome-note").textContent = "That is not the owner passphrase."; return; }
+  const text = currentCopy();
+  document.getElementById("copy-title").value = text.title || "";
+  document.getElementById("copy-body").value = (text.paragraphs || []).join("\n\n");
+  document.getElementById("owner-edit").hidden = false;
+});
+document.getElementById("owner-edit")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const next = { title: document.getElementById("copy-title").value.trim() || "What this is", paragraphs: document.getElementById("copy-body").value.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean) };
+  localStorage.setItem("meaning-atlas-copy", JSON.stringify(next));
+  const token = document.getElementById("owner-token").value.trim();
+  if (!token) { document.getElementById("welcome-note").textContent = "Saved on this browser. Add a GitHub token to publish it for everyone."; return; }
+  const path = "js/copy.json";
+  const api = "https://api.github.com/repos/Darkstone007/meaning-atlas/contents/" + path;
+  const headers = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" };
+  const current = await fetch(api, { headers }).then((response) => response.json());
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(next, null, 2) + "\n")));
+  const saved = await fetch(api, { method: "PUT", headers, body: JSON.stringify({ message: "Update the project text", content, sha: current.sha, branch: "main" }) });
+  document.getElementById("welcome-note").textContent = saved.ok ? "Published. The live site updates in about a minute." : "Saved here. GitHub did not accept that token.";
 });
 document.getElementById("shelf-search")?.addEventListener("input", renderShelves);
 setupLabels();
