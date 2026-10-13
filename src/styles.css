@@ -378,11 +378,11 @@ body {
   .atlas * { scroll-behavior: auto !important; }
 }
 
-.carry, .carry-gate { color: #f4eef8; font-family: Outfit, "Avenir Next", "Segoe UI", sans-serif; }
+.carry, .carry-gate { color: #f4eef8; font-family: "Times New Roman", Times, serif; }
 .carry-gate { min-height: 100vh; display: grid; place-items: center; padding: 32px 18px; background: radial-gradient(ellipse at 50% 0%, rgba(122, 90, 154, 0.28), transparent 55%), #0c0b0e; }
 .carry-card, .carry { background: #0c0b0e; }
 .carry-card { width: min(480px, 100%); background: #17141d; border: 1px solid #3a3148; border-radius: 28px; padding: 34px 28px; }
-.carry h1, .carry h2, .carry-card h1 { font-family: Fraunces, Georgia, serif; font-weight: 520; letter-spacing: -0.03em; }
+.carry h1, .carry h2, .carry-card h1, .carry-node, .carry strong { font-family: "Times New Roman", Times, serif; font-weight: 500; }
 .carry-card h1 { font-size: 52px; line-height: 0.95; margin: 10px 0; }
 .carry-eyebrow { letter-spacing: 0.16em; text-transform: uppercase; color: #c6b08a; font-size: 11px; margin: 0 0 6px; }
 .carry-lede, .carry-fine { color: #b3a6c2; line-height: 1.55; }
@@ -408,41 +408,33 @@ body {
 .carry-node small { color: #c6b08a; font-size: 11px; }
 .carry-node.on small { color: #4a3560; }
 .carry-inline { margin-top: 28px; }
-.shelf-row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; perspective: 1400px; }
-.volume { width: 220px; min-height: 300px; position: relative; }
+.shelf-row { display: flex; gap: 36px; flex-wrap: wrap; align-items: flex-end; padding: 28px 8px 18px; background: linear-gradient(transparent 70%, #2a2036 70%, #2a2036 78%, transparent 78%); }
+.volume { width: 230px; height: 320px; }
+.book3d { position: relative; width: 100%; height: 100%; perspective: 1600px; }
 .volume .cover {
-  width: 100%;
-  min-height: 300px;
-  border-radius: 4px 14px 14px 4px;
-  border: 0;
-  background:
-    linear-gradient(90deg, #2a2036 0 16px, #5a3f72 16px);
-  color: #f4eef8;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: flex-start;
-  padding: 22px;
-  text-align: left;
-  transform-origin: left center;
-  transition: transform 0.7s ease;
-  box-shadow: 8px 12px 24px rgba(0,0,0,0.35);
+  position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; border: 0; border-radius: 2px 10px 10px 2px;
+  background: linear-gradient(90deg, #241828 0 14px, #5a3f72 14px 22px, #6d4e8c 22px);
+  color: #f4eef8; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  padding: 22px 18px; text-align: left; transform-origin: left center;
+  transition: transform 0.9s cubic-bezier(.19,.8,.24,1);
+  box-shadow: 10px 16px 28px rgba(0,0,0,.4);
 }
-.volume .cover span { font-family: Fraunces, Georgia, serif; font-size: 28px; }
-.volume.open .cover { transform: rotateY(-155deg); }
+.volume .cover span { font-family: "Times New Roman", Times, serif; font-size: 30px; }
+.volume .cover small { letter-spacing: 0.14em; text-transform: uppercase; color: #c6b08a; }
+.volume.open .cover { transform: rotateY(-165deg); }
 .volume .pages {
-  display: none;
-  background: #f6f1ea;
-  color: #1c1424;
-  border-radius: 0 12px 12px 0;
-  padding: 16px;
-  min-height: 300px;
+  position: absolute; inset: 10px 6px 10px 12px; z-index: 1; overflow: auto;
+  background: #f6f1ea; color: #1c1424; padding: 16px 14px; border-radius: 0 8px 8px 0;
+  box-shadow: inset 8px 0 16px rgba(90,63,114,.08);
+  transform: rotateY(0deg); transform-origin: left center; opacity: 0; pointer-events: none;
+  transition: opacity 0.4s ease 0.15s;
 }
-.volume.open .pages { display: block; animation: openbook 0.6s ease; }
-.volume .pages p, .volume .pages h2, .volume .pages .carry-fine, .volume .pages .carry-pair span { color: #3a2a4a; }
-.volume .pages button { background: transparent; color: #1c1424; border: 0; border-bottom: 1px solid #d8cce0; border-radius: 0; width: 100%; text-align: left; }
+.volume.open .pages { opacity: 1; pointer-events: auto; animation: pageopen 0.8s ease; }
+.volume .pages p, .volume .pages h2, .volume .pages .carry-fine, .volume .pages .carry-pair span, .volume .pages .carry-pair p { color: #2a2036; }
+.volume .pages button { display: block; width: 100%; text-align: left; background: transparent; color: #1c1424; border: 0; border-bottom: 1px solid #e4d8ea; border-radius: 0; padding: 8px 0; font-family: "Times New Roman", Times, serif; font-size: 20px; }
 .volume .pages button.on { background: #efe6f4; }
-@keyframes openbook { from { opacity: 0; transform: rotateY(18deg); } to { opacity: 1; transform: none; } }
+.quiet-page { color: #6d5a78 !important; font-size: 14px; }
+@keyframes pageopen { from { transform: rotateY(28deg); opacity: 0; } to { transform: none; opacity: 1; } }
 .carry-node.word { font-family: Fraunces, Georgia, serif; font-size: 20px; }
 .carry-node.on { background: #d7c6e6; color: #1a1220; }
 .carry-story, .carry-concept { margin-top: 22px; }

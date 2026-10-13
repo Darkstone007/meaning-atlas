@@ -13,6 +13,10 @@ type Entry = {
   rephrasing: string;
   change: string;
   withheld: string;
+  languagePractice: string;
+  origin: string;
+  identity: string;
+  listenerPractice: string;
   alsoUsed: string;
   tags: { emotion: string[]; context: string[]; intention: string[] };
   image: string | null;
@@ -43,14 +47,19 @@ const HINTS: { layer: keyof typeof VOCAB; tag: string; words: string[] }[] = [
 ];
 
 const STORY: [string, keyof Entry][] = [
+  ["Languages you use, and who you use them with", "languagePractice"],
+  ["Where it comes from", "origin"],
+  ["Also used in", "alsoUsed"],
   ["Meaning", "meaning"],
   ["Example", "example"],
   ["Feeling", "feeling"],
   ["Context", "context"],
   ["Intention", "intention"],
-  ["Rephrasing", "rephrasing"],
+  ["How you would explain it", "rephrasing"],
   ["What changes", "change"],
-  ["When it is held back", "withheld"],
+  ["Who you are around", "withheld"],
+  ["Being yourself", "identity"],
+  ["When an expression is unfamiliar", "listenerPractice"],
 ];
 
 function normalize(value: string) {
@@ -85,7 +94,7 @@ export function Carry() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [view, setView] = useState<"home" | "web" | "shelves" | "add" | "people">("home");
+  const [view, setView] = useState<"web" | "shelves" | "add" | "people">("web");
   const [gate, setGate] = useState<"home" | "return" | "create" | "made">("home");
   const [madeId, setMadeId] = useState("");
   const [note, setNote] = useState("");
@@ -210,56 +219,21 @@ export function Carry() {
           <strong>Meaning Atlas</strong>
         </div>
         <nav>
-          {(["home", "web", "shelves", "add", "people"] as const).map((item) => (
-            <button key={item} type="button" className={view === item ? "on" : ""} onClick={() => setView(item)}>
-              {item === "home" ? "Home" : item === "web" ? "Word web" : item === "shelves" ? "Shelves" : item === "add" ? "Add a word" : "Profiles"}
-            </button>
-          ))}
+          <button type="button" className={view === "web" ? "on" : ""} onClick={() => setView("web")}>Word web</button>
+          {profileId ? (
+            <>
+              <button type="button" className={view === "shelves" ? "on" : ""} onClick={() => setView("shelves")}>Shelves</button>
+              <button type="button" className={view === "add" ? "on" : ""} onClick={() => setView("add")}>Add a word</button>
+              <button type="button" className={view === "people" ? "on" : ""} onClick={() => setView("people")}>Profiles</button>
+            </>
+          ) : null}
         </nav>
         <div className="carry-who">
-          {profileId ? <span>{reveal ? profileId : "ID hidden"}</span> : <button type="button" onClick={() => setView("home")}>Come in</button>}
-          {profileId ? <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => setProfileId(null))}>Leave</button> : null}
+          {profileId ? <span>{reveal ? profileId : "ID hidden"}</span> : null}
+          {profileId ? <button type="button" onClick={() => void fetch("/api/atlas/leave", { method: "POST" }).then(() => { setProfileId(null); setView("web"); })}>Leave</button> : null}
         </div>
       </header>
-      {view === "home" ? (
-        <main className="carry-main">
-          <ProjectInfo />
-          <section className="carry-card carry-inline">
-            <h2>Keep a record</h2>
-            <p className="carry-lede">Browsing needs no ID. An ID only keeps the words you add. It stays hidden unless you choose to show it.</p>
-            {profileId ? <p>You are in as {reveal ? profileId : "a hidden ID"}.</p> : null}
-            {!profileId && gate === "home" ? (
-              <div className="carry-stack">
-                <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
-                <button type="button" onClick={() => setGate("return")}>I already have an ID</button>
-                <button type="button" onClick={() => setGate("create")}>Make a record</button>
-              </div>
-            ) : null}
-            {!profileId && gate === "return" ? (
-              <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
-                <label>Your ID<input name="id" required placeholder="U-0000" /></label>
-                <label>Passphrase<input name="pass" type="password" required /></label>
-                <button className="carry-primary" type="submit">Come back in</button>
-              </form>
-            ) : null}
-            {!profileId && gate === "create" ? (
-              <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "create", passphrase: String(data.get("pass")) }); }}>
-                <label>Choose a passphrase<input name="pass" type="password" minLength={4} required /></label>
-                <button className="carry-primary" type="submit">Make my ID</button>
-              </form>
-            ) : null}
-            {gate === "made" ? (
-              <div>
-                <p className="carry-lede">Write this down. It is how you return to your words.</p>
-                <p className="carry-id">{madeId}</p>
-                <button className="carry-primary" type="button" onClick={() => void refresh()}>Done</button>
-              </div>
-            ) : null}
-            {note ? <p className="carry-bad">{note}</p> : null}
-          </section>
-        </main>
-      ) : null}
-      {view === "web" ? (
+      {view === "web" || !profileId ? (
         <main className="carry-main">
           <div className="carry-tools">
             <label>Search<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Word, language or meaning" /></label>
@@ -304,6 +278,40 @@ export function Carry() {
             <label>Tilt<input type="range" min={-55} max={55} value={pitch} onChange={(event) => setPitch(Number(event.target.value))} /></label>
             <button type="button" onClick={() => { setYaw(24); setPitch(16); }}>Reset view</button>
           </div>
+          {!profileId ? (
+            <section className="carry-card carry-inline">
+              <h2>Choose how to enter</h2>
+              <p className="carry-lede">The web is the entrance. Look, turn it, and press a word. Shelves, adding a word, and profiles open after you choose. Your ID stays hidden unless you later decide to show it.</p>
+              {gate === "home" ? (
+                <div className="carry-stack">
+                  <button className="carry-primary" type="button" onClick={() => void comeIn({ kind: "guest" })}>Enter as a guest</button>
+                  <button type="button" onClick={() => setGate("return")}>I already have an ID</button>
+                  <button type="button" onClick={() => setGate("create")}>Make a record</button>
+                </div>
+              ) : null}
+              {gate === "return" ? (
+                <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "return", id: String(data.get("id")), passphrase: String(data.get("pass")) }); }}>
+                  <label>Your ID<input name="id" required placeholder="U-0000" /></label>
+                  <label>Passphrase<input name="pass" type="password" required /></label>
+                  <button className="carry-primary" type="submit">Come back in</button>
+                </form>
+              ) : null}
+              {gate === "create" ? (
+                <form className="carry-stack" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void comeIn({ kind: "create", passphrase: String(data.get("pass")) }); }}>
+                  <label>Choose a passphrase<input name="pass" type="password" minLength={4} required /></label>
+                  <button className="carry-primary" type="submit">Make my ID</button>
+                </form>
+              ) : null}
+              {gate === "made" ? (
+                <div>
+                  <p className="carry-lede">Write this down. It is how you return to your words.</p>
+                  <p className="carry-id">{madeId}</p>
+                  <button className="carry-primary" type="button" onClick={() => void refresh()}>Enter</button>
+                </div>
+              ) : null}
+              {note ? <p className="carry-bad">{note}</p> : null}
+            </section>
+          ) : null}
           <article className="carry-story">
             {chosen ? chosen.accounts.map((entry) => <Story key={entry.id} entry={entry} />) : <ProjectInfo />}
           </article>
@@ -313,7 +321,7 @@ export function Carry() {
       {view === "people" ? (
         <People profiles={profiles} reveal={reveal} onToggle={async (next) => { await fetch("/api/atlas/profile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ reveal: next }) }); setRevealFlag(next); await refresh(); }} />
       ) : null}
-      {view === "add" ? (profileId ? <Add onDone={async (id) => { await refresh(); const entry = (await (await fetch("/api/atlas/entries")).json()).entries.find((item: Entry) => item.id === id); setSelected(entry ? `${normalize(entry.expression)}|${normalize(entry.language)}` : null); setView("web"); }} /> : <main className="carry-main"><p className="carry-lede">Come in from the home page before adding a word. The ID stays hidden.</p><button type="button" onClick={() => setView("home")}>Go to home</button></main>) : null}
+      {view === "add" && profileId ? <Add onDone={async (id) => { await refresh(); const entry = (await (await fetch("/api/atlas/entries")).json()).entries.find((item: Entry) => item.id === id); setSelected(entry ? `${normalize(entry.expression)}|${normalize(entry.language)}` : null); setView("web"); }} /> : null}
     </div>
   );
 }
@@ -322,11 +330,11 @@ function ProjectInfo() {
   return (
     <section className="carry-concept">
       <p className="carry-eyebrow">Meaning Atlas</p>
-      <h2>The words we carry</h2>
-      <p>Meaning Atlas is this project. It was first called The Words We Carry. The name changed. The work is the same: a place where a visitor starts with a word and stays with what it means to the person who uses it.</p>
-      <p>Each word belongs to one language. If that person also uses it in other languages, that is written beside the word. It does not split the word onto extra shelves. Massa is Wolof. Čist račun - duga ljubav is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples of the same kind of encounter. They are not survey findings. The other three are writings that were cleared to be shown.</p>
-      <p>The web holds words, not people. Press a word and its meanings appear underneath. Press it again and this note returns. A dashed line means two words were given the same label. Distance in the picture is only so the web can be turned. It is not a measure of how close two cultures are. People stay hidden unless they choose to show an ID.</p>
-      <p>The form came from wanting someone to follow an expression into another person’s explanation, and to leave room for their own. A picture, a voice, or a video appears only if that person gave one. Labels are offered from what was written, and nothing is applied until someone chooses it. That limit follows Boehner, DePaula, Dourish and Sengers, “How emotion is made and measured” (2007). The refusal to treat the picture as proof follows Johanna Drucker, “Humanities approaches to graphical display” (2011).</p>
+      <h2>What this is</h2>
+      <p>Meaning Atlas is a place to follow a word into the account around it: how someone uses it, who they use it with, where it comes from for them, and a picture, voice, or video only if they gave one.</p>
+      <p>Each word belongs to one language. If they also use it in other languages, that is written beside the word. It does not become another shelf. Massa is Wolof. Čist račun - duga ljubav is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples, not survey findings. The other three are writings that were cleared to be shown.</p>
+      <p>The web holds words, not people. Press a word and the survey answers appear underneath. Press it again and this note returns. A dashed line means two words were given the same label. Turning the web does not measure how close two cultures are. People stay hidden unless they choose to show an ID.</p>
+      <p>Labels are offered from what was written, and nothing is applied until someone chooses it. That follows Boehner, DePaula, Dourish and Sengers, “How emotion is made and measured” (2007), and Johanna Drucker, “Humanities approaches to graphical display” (2011).</p>
     </section>
   );
 }
@@ -337,7 +345,6 @@ function Story({ entry }: { entry: Entry }) {
       <p className="carry-eyebrow">{entry.source === "example" ? "Example, not a survey response" : entry.source === "survey" ? "From the survey" : "Added here"}</p>
       <h2>{entry.expression}</h2>
       <p className="carry-fine">{entry.language}{entry.community ? ` · ${entry.community}` : ""}{entry.userId ? ` · ${entry.userId}` : ""}</p>
-      {entry.alsoUsed ? <div className="carry-pair"><span>Also used in</span><p>{entry.alsoUsed}</p></div> : null}
       {STORY.map(([label, key]) => {
         const text = String(entry[key] || "");
         if (!text) return null;
@@ -365,18 +372,20 @@ function Shelves({ entries }: { entries: Entry[] }) {
           const page = books.find((entry) => entry.id === reading);
           return (
             <div key={language} className={`volume${isOpen ? " open" : ""}`}>
-              <button type="button" className="cover" onClick={() => { setOpen(isOpen ? null : language); setReading(null); }}>
-                <span>{language}</span>
-                <small>{isOpen ? "Close the book" : "Open the book"}</small>
-              </button>
-              <div className="pages">
-                <p>{language}. {books.length} {books.length === 1 ? "word" : "words"} filed here. Other languages a word travels through are noted inside, not as another book.</p>
-                {books.map((entry) => (
-                  <button key={entry.id} type="button" className={reading === entry.id ? "on" : ""} onClick={() => setReading(reading === entry.id ? null : entry.id)}>
-                    {entry.expression}
-                  </button>
-                ))}
-                {page ? <Story entry={page} /> : null}
+              <div className="book3d">
+                <button type="button" className="cover" onClick={() => { setOpen(isOpen ? null : language); setReading(null); }}>
+                  <span>{language}</span>
+                  <small>{isOpen ? "Close" : "Open"}</small>
+                </button>
+                <div className="pages">
+                  <p>{language}. {books.length} {books.length === 1 ? "word" : "words"} on this shelf.</p>
+                  {books.map((entry) => (
+                    <button key={entry.id} type="button" className={reading === entry.id ? "on" : ""} onClick={() => setReading(reading === entry.id ? null : entry.id)}>
+                      {entry.expression}
+                    </button>
+                  ))}
+                  {page ? <Story entry={page} /> : <p className="quiet-page">Open a word in the book. It stays here.</p>}
+                </div>
               </div>
             </div>
           );
@@ -446,6 +455,10 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
             rephrasing: data.get("rephrasing"),
             change: data.get("change"),
             withheld: data.get("withheld"),
+            languagePractice: data.get("languagePractice"),
+            origin: data.get("origin"),
+            identity: data.get("identity"),
+            listenerPractice: data.get("listenerPractice"),
             emotion,
             contextTags,
             intentionTags,
@@ -471,16 +484,20 @@ function Add({ onDone }: { onDone: (id: string) => Promise<void> }) {
           <label>Video<input type="file" accept="video/mp4,video/webm" onChange={async (event) => { const file = event.target.files?.[0]; setVideo(file ? await readFile(file) : null); }} /><span>Optional. Empty means no video.</span></label>
         </div>
         <label>Community, if it matters<input name="community" /></label>
-        <label>Meaning<textarea name="meaning" required onChange={(event) => setText(event.target.value)} /></label>
+        <label>What languages or ways of speaking do you use, and who do you usually use them with?<textarea name="languagePractice" /></label>
+        <label>Where does this expression come from for you?<textarea name="origin" /></label>
+        <label>In an example, what does it mean to you, and what feeling are you trying to express?<textarea name="meaning" required onChange={(event) => setText(event.target.value)} /></label>
+        <label>How would you use it? Give an example and who you would be speaking to.<textarea name="example" /></label>
+        <label>How would you explain or replace it for someone who doesn’t understand it?<textarea name="rephrasing" /></label>
+        <label>What, if anything, changes when you explain it?<textarea name="change" /></label>
+        <label>Does who you are around change whether you use it?<textarea name="withheld" /></label>
+        <label>Does changing how you speak affect how comfortable you feel being yourself?<textarea name="identity" /></label>
+        <label>When someone uses an expression you don’t know, what do you usually do?<textarea name="listenerPractice" /></label>
         <details>
-          <summary>More, if you want it</summary>
-          <label>Example<textarea name="example" /></label>
+          <summary>Separate a feeling, context, or intention</summary>
           <label>Feeling<textarea name="feeling" onChange={(event) => setText((value) => `${value} ${event.target.value}`)} /></label>
           <label>Who you use it with<textarea name="context" /></label>
           <label>What you are trying to do<textarea name="intention" /></label>
-          <label>How you would explain it<textarea name="rephrasing" /></label>
-          <label>What changes<textarea name="change" /></label>
-          <label>When you hold it back<textarea name="withheld" /></label>
         </details>
         <p className="carry-fine">Choose a label, or add your own. Anything noticed in what you wrote is offered here. It is not applied until you choose it.</p>
         {noticed.length ? (

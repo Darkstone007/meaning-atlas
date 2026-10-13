@@ -16,9 +16,15 @@ export type PublicEntry = {
   rephrasing: string;
   change: string;
   withheld: string;
+  languagePractice: string;
+  origin: string;
+  identity: string;
+  listenerPractice: string;
   tags: { emotion: string[]; context: string[]; intention: string[] };
+  alsoUsed: string;
   image: string | null;
   audio: string | null;
+  video: string | null;
   source: string;
   userId: string | null;
   mine: boolean;
@@ -40,7 +46,11 @@ const SEED = [
     intention: "Comfort.",
     rephrasing: "The closest word I have found in use is the Arabic مِسْكِين. Before that I explained it, then kept saying it.",
     change: "A few sentences have to stand in for one word.",
-    withheld: "I would not use it with people who are not close, or with a professor. It is informal.",
+    withheld: "I wouldn't use it with people who are not close friends, whether they understand it or not. Massa is informal in Wolof and wouldn't be said to a professor.",
+    languagePractice: "French and Wolof with some friends and family. English with friends.",
+    origin: "It comes from Wolof.",
+    identity: "",
+    listenerPractice: "I ask what it means, even for small things, rather than stay confused. That is also why I explain Massa instead of changing my vocabulary.",
     emotion: "care",
     contextTags: "friends;family",
     intentionTags: "comfort",
@@ -60,7 +70,11 @@ const SEED = [
     intention: "Comfort.",
     rephrasing: 'I usually say it is something like "I\'m sorry". That sounds more polite, and less close.',
     change: "I can explain the meaning. I am not sure I can translate how it feels.",
-    withheld: "Around Senegalese people I use it without thinking. Some friends who are not Senegalese use it back.",
+    withheld: "When I am around Senegalese people I use it without thinking. I also use it with friends who are not Senegalese, and some of them use it with me.",
+    languagePractice: "Wolof with family and other Senegalese people. French with friends and classmates. English with classmates, professors, and anyone who does not speak Wolof or French.",
+    origin: "I grew up hearing and using it in Senegal. It is how we express empathy, care, and solidarity.",
+    identity: "",
+    listenerPractice: "I ask what it means when a simple translation does not seem enough.",
     emotion: "care",
     contextTags: "friends;family",
     intentionTags: "comfort",
@@ -72,6 +86,7 @@ const SEED = [
     expression: "Čist račun - duga ljubav",
     language: "Montenegrin",
     community: "The Balkans",
+    alsoUsed: "Serbian; Bosnian",
     meaning:
       "It says somebody is rightful and respects the deal. If the dealing stays clean, the love can last, because there is no bad blood. The same saying is also used in Serbian and Bosnian. The entry is filed under one language, Montenegrin, so it is not split into three shelves.",
     example: "Somebody is giving a debt back, even to a close friend.",
@@ -80,7 +95,11 @@ const SEED = [
     intention: "Approval of a clean dealing.",
     rephrasing: "The literal translation is clear debt, long love.",
     change: "The sentence is not replaced. It is only pointed at.",
-    withheld: "It is part of how I speak when it is accurate.",
+    withheld: "",
+    languagePractice: "Montenegrin, Serbian, Bosnian, English, French, Arabic.",
+    origin: "The Balkans.",
+    identity: "It is part of my identity when it is accurate. There is no other sentence like it, and it feels like home.",
+    listenerPractice: "I ask about it and try to carry the saying into my own language, or learn an English translation.",
     emotion: "affection",
     contextTags: "friends",
     intentionTags: "approval",
@@ -161,11 +180,11 @@ export async function ensureSeed() {
     await sql`
       insert into atlas_entry (
         id, profile_id, expression, language, community, meaning, example, feeling, context, intention,
-        rephrasing, change_note, withheld, emotion, context_tags, intention_tags, source
+        rephrasing, change_note, withheld, language_practice, origin, identity, listener_practice, emotion, context_tags, intention_tags, also_used, source
       ) values (
         ${item.id}, ${item.profile}, ${item.expression}, ${item.language}, ${item.community}, ${item.meaning},
         ${item.example}, ${item.feeling}, ${item.context}, ${item.intention}, ${item.rephrasing}, ${item.change},
-        ${item.withheld}, ${item.emotion}, ${item.contextTags}, ${item.intentionTags}, ${item.source}
+        ${item.withheld}, ${item.languagePractice || ""}, ${item.origin || ""}, ${item.identity || ""}, ${item.listenerPractice || ""}, ${item.emotion}, ${item.contextTags}, ${item.intentionTags}, ${"alsoUsed" in item ? item.alsoUsed : ""}, ${item.source}
       ) on conflict (id) do nothing
     `;
   }
@@ -232,6 +251,10 @@ type Row = {
   rephrasing: string;
   change_note: string;
   withheld: string;
+  language_practice: string;
+  origin: string;
+  identity: string;
+  listener_practice: string;
   emotion: string;
   context_tags: string;
   intention_tags: string;
@@ -239,6 +262,9 @@ type Row = {
   image_mime: string | null;
   audio_data: string | null;
   audio_mime: string | null;
+  video_data: string | null;
+  video_mime: string | null;
+  also_used: string;
   source: string;
   reveal: boolean;
 };
@@ -258,6 +284,10 @@ function present(row: Row, viewer: string | null): PublicEntry {
     rephrasing: row.rephrasing,
     change: row.change_note,
     withheld: row.withheld,
+    languagePractice: row.language_practice || "",
+    origin: row.origin || "",
+    identity: row.identity || "",
+    listenerPractice: row.listener_practice || "",
     tags: {
       emotion: splitTags(row.emotion),
       context: splitTags(row.context_tags),
@@ -265,6 +295,8 @@ function present(row: Row, viewer: string | null): PublicEntry {
     },
     image: row.image_data && row.image_mime ? `data:${row.image_mime};base64,${row.image_data}` : null,
     audio: row.audio_data && row.audio_mime ? `data:${row.audio_mime};base64,${row.audio_data}` : null,
+    video: row.video_data && row.video_mime ? `data:${row.video_mime};base64,${row.video_data}` : null,
+    alsoUsed: row.also_used || "",
     source: row.source,
     userId: show ? row.profile_id : null,
     mine: viewer === row.profile_id,
@@ -310,6 +342,7 @@ export async function setReveal(profileId: string, reveal: boolean) {
 
 const allowedImage = /^image\/(jpeg|png|webp|gif)$/;
 const allowedAudio = /^audio\/(mpeg|mp3|mp4|wav|x-wav|ogg|webm|aac|flac)$/;
+const allowedVideo = /^video\/(mp4|webm)$/;
 
 function takeFile(value: unknown, pattern: RegExp, label: string) {
   if (!value || typeof value !== "object") return { data: null as string | null, mime: null as string | null };
@@ -329,19 +362,21 @@ export async function addEntry(profileId: string, body: Record<string, unknown>)
   if (expression.length > 120 || language.length > 80) throw new Error("The word or the language label is too long.");
   const image = takeFile(body.image, allowedImage, "image");
   const audio = takeFile(body.audio, allowedAudio, "audio");
+  const video = takeFile(body.video, allowedVideo, "video");
   const id = crypto.randomUUID();
   const sql = await getSql();
   await sql`
     insert into atlas_entry (
       id, profile_id, expression, language, community, meaning, example, feeling, context, intention,
-      rephrasing, change_note, withheld, emotion, context_tags, intention_tags, image_data, image_mime, audio_data, audio_mime, source
+      rephrasing, change_note, withheld, language_practice, origin, identity, listener_practice, emotion, context_tags, intention_tags, also_used, image_data, image_mime, audio_data, audio_mime, video_data, video_mime, source
     ) values (
       ${id}, ${profileId}, ${expression}, ${language}, ${String(body.community || "").trim()}, ${meaning},
       ${String(body.example || "").trim()}, ${String(body.feeling || "").trim()}, ${String(body.context || "").trim()},
       ${String(body.intention || "").trim()}, ${String(body.rephrasing || "").trim()}, ${String(body.change || "").trim()},
-      ${String(body.withheld || "").trim()}, ${splitTags(String(body.emotion || "")).join(";")},
+      ${String(body.withheld || "").trim()}, ${String(body.languagePractice || "").trim()}, ${String(body.origin || "").trim()},
+      ${String(body.identity || "").trim()}, ${String(body.listenerPractice || "").trim()}, ${splitTags(String(body.emotion || "")).join(";")},
       ${splitTags(String(body.contextTags || "")).join(";")}, ${splitTags(String(body.intentionTags || "")).join(";")},
-      ${image.data}, ${image.mime}, ${audio.data}, ${audio.mime}, 'visitor'
+      ${String(body.alsoUsed || "").trim()}, ${image.data}, ${image.mime}, ${audio.data}, ${audio.mime}, ${video.data}, ${video.mime}, 'visitor'
     )
   `;
   return id;

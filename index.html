@@ -14,10 +14,9 @@
     <header class="top">
       <strong class="brand">Meaning Atlas</strong>
       <nav class="nav">
-        <button type="button" data-view="home" class="active">Home</button>
-        <button type="button" data-view="web">Word web</button>
-        <button type="button" data-view="shelves">Shelves</button>
-        <button type="button" data-view="add">Add a word</button>
+        <button type="button" data-view="web" class="active">Word web</button>
+        <button type="button" data-view="shelves" id="nav-shelves" hidden>Shelves</button>
+        <button type="button" data-view="add" id="nav-add" hidden>Add a word</button>
       </nav>
       <div class="who"><span class="pill" id="who">Come in</span></div>
     </header>
@@ -42,6 +41,14 @@
           <label>Tilt<input id="pitch" type="range" min="-55" max="55" value="16"></label>
           <button class="btn" id="reset-view" type="button">Reset</button>
         </div>
+        <section class="card" id="enter">
+          <h2>Choose how to enter</h2>
+          <p class="lede">The web is the entrance. Turn it and press a word. The shelves and the form open after you choose.</p>
+          <div class="stack">
+            <button class="btn primary" id="guest" type="button">Enter as a guest</button>
+            <button class="btn" id="make" type="button">Make a record</button>
+          </div>
+        </section>
         <article id="under"></article>
       </section>
       <section id="view-shelves" hidden><div id="shelves" class="shelf-row"></div></section>
@@ -54,12 +61,19 @@
             <label>One language<input name="language" required maxlength="80"></label>
           </div>
           <label>Also used in other languages<input name="also" placeholder="Separate with ;"></label>
+          <label>What languages or ways of speaking do you use, and who do you use them with?<textarea name="languagePractice"></textarea></label>
+          <label>Where does this expression come from for you?<textarea name="origin"></textarea></label>
+          <label>What does it mean to you?<textarea name="meaning" required></textarea></label>
+          <label>How would you use it? An example, and who you would be speaking to.<textarea name="example"></textarea></label>
+          <label>How would you explain it, and what changes?<textarea name="rephrasing"></textarea></label>
+          <label>Does who you are around change whether you use it?<textarea name="withheld"></textarea></label>
+          <label>Does changing how you speak affect being yourself?<textarea name="identity"></textarea></label>
+          <label>When an expression is unfamiliar, what do you usually do?<textarea name="listenerPractice"></textarea></label>
           <div class="uploads">
             <label>Image<input name="image" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
             <label>Audio<input name="audio" type="file" accept="audio/*"></label>
             <label>Video<input name="video" type="file" accept="video/mp4,video/webm"></label>
           </div>
-          <label>Meaning<textarea name="meaning" required></textarea></label>
           <p class="legend">Choose a label, add your own, or accept one noticed in what you wrote.</p>
           <div id="noticed" class="checks"></div>
           <div id="labels"></div>

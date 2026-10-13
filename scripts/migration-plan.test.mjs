@@ -60,7 +60,7 @@ test("sign-in copies the auth schema into the applied migrations", () => {
   const migrationsDir = join(projectRoot(), "migrations");
   assert.deepEqual(
     pendingMigrations(readdirSync(migrationsDir), []).map((item) => item.name),
-    ["0001_auth.sql", "0002_atlas.sql"],
+    ["0001_auth.sql", "0002_atlas.sql", "0003_atlas_media.sql", "0004_atlas_questions.sql"],
   );
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
 });

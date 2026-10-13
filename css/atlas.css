@@ -10,7 +10,7 @@
   --gold: #c6b08a;
   --danger: #e3b4b4;
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
-  font-family: Outfit, "Avenir Next", "Segoe UI", sans-serif;
+  font-family: "Times New Roman", Times, serif;
   color: var(--paper);
   background: var(--ink);
   color-scheme: dark;
@@ -46,7 +46,7 @@ a { color: var(--lilac); }
   font-size: 11px;
   color: var(--gold);
 }
-h1, h2 { font-family: Fraunces, Georgia, serif; font-weight: 520; letter-spacing: -0.03em; }
+h1, h2 { font-family: "Times New Roman", Times, serif; font-weight: 500; letter-spacing: 0; }
 h1 { font-size: clamp(42px, 7vw, 58px); line-height: 0.95; margin: 14px 0 12px; }
 .lede { color: var(--quiet); font-size: 17px; line-height: 1.55; margin: 0 0 22px; }
 .stack { display: grid; gap: 10px; }

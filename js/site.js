@@ -1,4 +1,23 @@
 const KEY = "meaning-atlas-pages-v2";
+const MORE = {
+  "acct-4f2a": {
+    languagePractice: "French and Wolof with some friends and family. English with friends.",
+    origin: "It comes from Wolof.",
+    listenerPractice: "I ask what it means, even for small things, rather than stay confused.",
+  },
+  "acct-91c7": {
+    languagePractice: "Wolof with family and other Senegalese people. French with friends and classmates. English with classmates, professors, and anyone who does not speak Wolof or French.",
+    origin: "I grew up hearing and using it in Senegal. It is how we express empathy, care, and solidarity.",
+    listenerPractice: "I ask what it means when a simple translation does not seem enough.",
+  },
+  "acct-3b80": {
+    languagePractice: "Montenegrin, Serbian, Bosnian, English, French, Arabic.",
+    origin: "The Balkans.",
+    identity: "It is part of my identity when it is accurate. There is no other sentence like it, and it feels like home.",
+    listenerPractice: "I ask about it and try to carry the saying into my own language, or learn an English translation.",
+    also: "Serbian; Bosnian",
+  },
+};
 const VOCAB = {
   emotion: ["care", "affection", "joy", "longing", "pride", "frustration", "mixed"],
   context: ["friends", "family", "home", "work", "celebration", "greeting"],
@@ -27,7 +46,7 @@ function load() {
     const saved = JSON.parse(localStorage.getItem(KEY) || "null");
     if (saved && Array.isArray(saved.records)) return saved;
   } catch { /* fresh */ }
-  return { session: null, records: SEED.map((record) => ({ ...record, also: record.also || (record.expression.startsWith("Čist") ? "Serbian; Bosnian" : ""), image: record.image || "", audio: record.audio || "", video: "" })) };
+  return { session: null, records: SEED.map((record) => ({ ...(MORE[record.id] || {}), ...record, also: record.also || (MORE[record.id] && MORE[record.id].also) || "", image: record.image || "", audio: record.audio || "", video: "" })) };
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 function norm(value) { return String(value || "").normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en"); }
@@ -61,10 +80,10 @@ function show(name) {
   if (name === "shelves") renderShelves();
 }
 function projectHtml() {
-  return `<p class="eyebrow">Meaning Atlas</p><h2>The words we carry</h2>
-  <p>Meaning Atlas is this project. It was first called The Words We Carry. The name changed. The work is the same: start with a word and stay with what it means to the person who uses it.</p>
+  return `<p class="eyebrow">Meaning Atlas</p><h2>What this is</h2>
+  <p>Meaning Atlas is a place to follow a word into the account around it: how someone uses it, who they use it with, where it comes from for them, and a picture, voice, or video only if they gave one.</p>
   <p>Each word belongs to one language. If it is also used in other languages, that is written beside it and does not make another shelf. Massa is Wolof. The proverb is Montenegrin, and it is also used in Serbian and Bosnian. Lekker and shame are Afrikaans examples, not survey findings.</p>
-  <p>The web holds words, not people. Press a word and the meanings appear here. Press it again and this note returns. A dashed line is a shared label, not a cultural score. People stay hidden unless they choose to show an ID. A picture, a voice, or a video appears only if someone gave one.</p>`;
+  <p>The web holds words, not people. Press a word and the survey answers appear here. Press it again and this note returns. A dashed line is a shared label, not a cultural score. Turning the web does not measure closeness. People stay hidden unless they choose to show an ID.</p>`;
 }
 function renderHome() {
   const box = document.getElementById("view-home");
@@ -75,7 +94,15 @@ function renderHome() {
   document.getElementById("guest")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
   document.getElementById("make")?.addEventListener("click", () => { state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false }; save(); who(); renderHome(); });
 }
-function who() { document.getElementById("who").textContent = state.session ? "ID hidden" : "Come in"; }
+function who() {
+  document.getElementById("who").textContent = state.session ? "ID hidden" : "Choose below";
+  const shelves = document.getElementById("nav-shelves");
+  const add = document.getElementById("nav-add");
+  const enter = document.getElementById("enter");
+  if (shelves) shelves.hidden = !state.session;
+  if (add) add.hidden = !state.session;
+  if (enter) enter.hidden = Boolean(state.session);
+}
 function renderWeb() {
   const list = groups();
   const stage = document.getElementById("stage");
@@ -118,8 +145,21 @@ function renderWeb() {
   under.innerHTML = chosen ? chosen.accounts.map(meaningHtml).join("") : `<article class="story">${projectHtml()}</article>`;
 }
 function meaningHtml(record) {
+  const rows = [
+    ["Languages you use", record.languagePractice],
+    ["Where it comes from", record.origin],
+    ["Also used in", record.also],
+    ["Meaning", record.meaning],
+    ["Example", record.example],
+    ["Feeling", record.feeling],
+    ["How you would explain it", record.rephrasing],
+    ["What changes", record.change],
+    ["Who you are around", record.withheld],
+    ["Being yourself", record.identity],
+    ["When an expression is unfamiliar", record.listenerPractice],
+  ].filter((row) => row[1]);
   const media = `${record.image ? `<img alt="" src="${record.image}">` : ""}${record.audio ? `<audio controls src="${record.audio}"></audio>` : ""}${record.video ? `<video controls src="${record.video}"></video>` : ""}`;
-  return `<article class="story"><h2>${record.expression}</h2><p class="legend">${record.language}${record.also ? " · also used in " + record.also : ""}</p><p>${record.meaning || ""}</p>${media}</article>`;
+  return `<article class="story"><h2>${record.expression}</h2><p class="legend">${record.language}${record.community ? " · " + record.community : ""}</p>${rows.map((row) => `<div class="pair"><span>${row[0]}</span><p>${row[1]}</p></div>`).join("")}${media}</article>`;
 }
 function renderShelves() {
   const host = document.getElementById("shelves");
@@ -192,7 +232,15 @@ document.getElementById("add").onsubmit = async (event) => {
   const record = {
     id: crypto.randomUUID(), userId: state.session.id, reveal: false,
     expression: form.expression.value.trim(), language: form.language.value.split(";")[0].trim(),
-    also: form.also.value.trim(), meaning: form.meaning.value.trim(), community: "",
+    also: form.also.value.trim(),
+    languagePractice: form.languagePractice.value.trim(),
+    origin: form.origin.value.trim(),
+    example: form.example.value.trim(),
+    rephrasing: form.rephrasing.value.trim(),
+    withheld: form.withheld.value.trim(),
+    identity: form.identity.value.trim(),
+    listenerPractice: form.listenerPractice.value.trim(),
+    meaning: form.meaning.value.trim(), community: "",
     tags: { emotion: [], context: [], intention: [] },
     image: await file(form.image), audio: await file(form.audio), video: await file(form.video), source: "visitor",
   };
@@ -216,7 +264,14 @@ document.querySelector("[name=meaning]").addEventListener("input", (event) => {
     host.append(button);
   });
 });
+function enterAs() {
+  state.session = { id: "U-" + Math.random().toString(36).slice(2, 6).toUpperCase(), reveal: false };
+  save();
+  who();
+}
+document.getElementById("guest")?.addEventListener("click", enterAs);
+document.getElementById("make")?.addEventListener("click", enterAs);
 setupLabels();
 who();
-show("home");
+show("web");
 window.addEventListener("resize", () => { if (view === "web") renderWeb(); });
