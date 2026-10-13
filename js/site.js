@@ -13,7 +13,9 @@ Words and accounts are kept in this browser. There is no server behind the page.
 */
 
 // The browser key for the words and the current session.
+// The shared copy is the CrudCrud collection below. Every account reads and writes that, not only this browser.
 const KEY = "meaning-atlas-pages-v2";
+const CLOUD = "https://crudcrud.com/api/475a8eec30fb4daa9693e81156fe7f54";
 // Extra survey answers for the three cleared accounts. Merged in when the page has no saved records yet.
 const MORE = {
   "acct-4f2a": {
@@ -106,8 +108,135 @@ function load() {
   } catch { /* fresh */ }
   return { session: null, records: SEED.map((record) => ({ ...(MORE[record.id] || {}), ...record, also: record.also || (MORE[record.id] && MORE[record.id].also) || "", image: record.image || "", audio: record.audio || "", video: "" })) };
 }
-// Write the words and the session back to this browser.
+// Write the words and the session back to this browser. The shared copy is published separately.
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+let cloudChain = Promise.resolve();
+function enqueue(job) {
+  const run = cloudChain.then(job, job);
+  cloudChain = run.then(() => {}, () => {});
+  return run;
+}
+async function cloudGet(path) {
+  const response = await fetch(CLOUD + path);
+  if (!response.ok) throw new Error("cloud " + response.status);
+  return response.json();
+}
+async function cloudSend(path, method, body) {
+  const response = await fetch(CLOUD + path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error("cloud " + response.status);
+  if (method === "POST") return response.json();
+  return null;
+}
+function wordBody(record) {
+  const body = { ...record, updatedAt: record.updatedAt || Date.now() };
+  delete body._crud;
+  return body;
+}
+async function publishWord(record) {
+  record.updatedAt = Date.now();
+  const body = wordBody(record);
+  if (record._crud) {
+    const response = await fetch(CLOUD + "/words/" + record._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (response.ok) return;
+    if (response.status !== 404) throw new Error("cloud " + response.status);
+    delete record._crud;
+  }
+  const created = await cloudSend("/words", "POST", body);
+  record._crud = created._id;
+}
+async function publishAccount(account) {
+  const body = { ...account };
+  delete body._crud;
+  if (account._crud) {
+    const response = await fetch(CLOUD + "/accounts/" + account._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (response.ok) return;
+    if (response.status !== 404) throw new Error("cloud " + response.status);
+    delete account._crud;
+  }
+  const created = await cloudSend("/accounts", "POST", body);
+  account._crud = created._id;
+  const list = knownIds().map((item) => item.id === account.id ? account : item);
+  if (!list.some((item) => item.id === account.id)) list.push(account);
+  localStorage.setItem(KEY + "-ids", JSON.stringify(list));
+}
+async function pullAccounts() {
+  const remote = await cloudGet("/accounts");
+  const map = new Map(knownIds().map((item) => [item.id, item]));
+  remote.forEach((item) => {
+    const crud = item._id;
+    delete item._id;
+    map.set(item.id, { ...(map.get(item.id) || {}), ...item, _crud: crud });
+  });
+  localStorage.setItem(KEY + "-ids", JSON.stringify([...map.values()]));
+}
+async function publishBoard() {
+  let labels = {};
+  try { labels = JSON.parse(localStorage.getItem("meaning-atlas-labels") || "{}") || {}; } catch { labels = {}; }
+  let site = {};
+  try { site = JSON.parse(localStorage.getItem("meaning-atlas-site-v3") || "{}") || {}; } catch { site = {}; }
+  const body = { kind: "board", labels, site, updatedAt: Date.now() };
+  const list = await cloudGet("/board");
+  if (list[0]) await cloudSend("/board/" + list[0]._id, "PUT", body);
+  else await cloudSend("/board", "POST", body);
+}
+async function pullBoard() {
+  const list = await cloudGet("/board");
+  const board = list[0];
+  if (!board) return 0;
+  if (board.labels) localStorage.setItem("meaning-atlas-labels", JSON.stringify(board.labels));
+  if (board.site && (board.site.paragraphs || board.site.welcome)) localStorage.setItem("meaning-atlas-site-v3", JSON.stringify(board.site));
+  return board.updatedAt || 0;
+}
+let lastStamp = "";
+async function refreshShared() {
+  const remote = await cloudGet("/words");
+  const drop = [];
+  const byId = new Map();
+  remote.forEach((item) => {
+    const crud = item._id;
+    delete item._id;
+    const record = { ...item, _crud: crud };
+    const key = record.id || crud;
+    const prev = byId.get(key);
+    if (!prev || (record.updatedAt || 0) >= (prev.updatedAt || 0)) {
+      if (prev) drop.push(prev);
+      byId.set(key, record);
+    } else drop.push(record);
+  });
+  for (const extra of drop) {
+    try { await fetch(CLOUD + "/words/" + extra._crud, { method: "DELETE" }); } catch { /* the next refresh tries again */ }
+  }
+  const pending = state.records.filter((record) => record.id && ![...byId.values()].some((item) => item.id === record.id));
+  for (const record of pending) {
+    await publishWord(record);
+    byId.set(record.id, record);
+  }
+  if (!byId.size) {
+    const seeds = load().records.filter((record) => record.source === "survey" || record.source === "example");
+    for (const record of seeds) {
+      record.updatedAt = record.updatedAt || 1;
+      await publishWord(record);
+      byId.set(record.id, record);
+    }
+  }
+  state.records = [...byId.values()];
+  save();
+  await pullAccounts();
+  const boardTime = await pullBoard();
+  const stamp = boardTime + "|" + state.records.map((record) => record.id + ":" + (record.updatedAt || 0)).sort().join("|");
+  if (stamp === lastStamp) return;
+  lastStamp = stamp;
+  if (view === "web") renderWeb();
+  if (view === "shelves") renderShelves();
+  if (view === "account") renderAccount();
+}
+function syncShared() {
+  return enqueue(() => refreshShared());
+}
 // One way of comparing words: trim, collapse spaces, ignore case.
 function norm(value) { return String(value || "").normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("en"); }
 // Turn a 3D point into a place on the map. yaw spins it. pitch tilts it.
@@ -535,6 +664,7 @@ function rememberLabel(layer, value) {
   saved[layer] = saved[layer] || [];
   if (!saved[layer].some((item) => item.toLowerCase() === clean.toLowerCase())) saved[layer].push(clean);
   localStorage.setItem("meaning-atlas-labels", JSON.stringify(saved));
+  enqueue(() => publishBoard()).catch(() => {});
 }
 // Draw the three label groups. Typing your own label and leaving the field adds it to the list and ticks it.
 function setupLabels() {
@@ -647,15 +777,26 @@ document.getElementById("add").onsubmit = async (event) => {
     const index = state.records.findIndex((item) => item.id === editingId && item.userId === state.session.id);
     if (index >= 0) {
       record.id = editingId;
+      record._crud = state.records[index]._crud;
       record.image = record.image || state.records[index].image;
       record.audio = record.audio || state.records[index].audio;
       record.video = record.video || state.records[index].video;
-      state.records[index] = record;
     }
+  }
+  try {
+    await enqueue(() => publishWord(record));
+  } catch {
+    document.getElementById("add-note").textContent = "This word was not saved for the other accounts. Nothing was changed. Try again.";
+    return;
+  }
+  if (editingId) {
+    const index = state.records.findIndex((item) => item.id === editingId && item.userId === state.session.id);
+    if (index >= 0) state.records[index] = record;
     editingId = null;
   } else state.records.push(record);
-  try { save(); } catch { /* The word is still on the map for this visit if the browser cannot store it. */ }
+  try { save(); } catch { /* The shared copy is already updated. This browser could not keep a local copy. */ }
   setupLabels();
+  enqueue(() => publishBoard()).catch(() => {});
   form.reset();
   const search = document.getElementById("search");
   if (search) search.value = "";
@@ -670,6 +811,7 @@ function enterAs(id, next) {
   save();
   who();
   show(next || "web");
+  syncShared().catch(() => {});
 }
 // IDs made on this browser, with the hashed passphrase and the account choices.
 function knownIds() {
@@ -685,6 +827,7 @@ function saveProfile(fields) {
   localStorage.setItem(KEY + "-ids", JSON.stringify(list));
   Object.assign(state.session, fields);
   save();
+  enqueue(() => publishAccount(item)).catch(() => {});
 }
 // The account page. The ID is shown here, not on the map.
 // Until they change it, the passphrase is the user ID.
@@ -892,8 +1035,13 @@ function renderOwnerWords() {
       record.context = form.context.value.trim();
       record.intention = form.intention.value.trim();
       record.youtube = form.youtube.value.trim();
+      record.updatedAt = Date.now();
       save();
-      document.getElementById("owner-note").textContent = "Saved " + record.expression + " on this browser.";
+      enqueue(() => publishWord(record)).then(() => {
+        document.getElementById("owner-note").textContent = "Saved " + record.expression + " for every account.";
+      }).catch(() => {
+        document.getElementById("owner-note").textContent = "Saved on this browser only. The shared copy did not update.";
+      });
       renderOwnerWords();
     };
     host.append(form);
@@ -902,12 +1050,19 @@ function renderOwnerWords() {
 // Make an ID. That ID is the passphrase until they change it.
 // The ID is shown on the account page, not on the main page.
 async function createId() {
+  try { await enqueue(() => pullAccounts()); } catch { /* use the ids already on this browser */ }
   const id = freshId();
   const list = knownIds();
-  list.push({ id, pass: await sha(id), passIsId: true, name: "", contact: false, contactHow: "", similar: false, reveal: false });
+  const account = { id, pass: await sha(id), passIsId: true, name: "", contact: false, contactHow: "", similar: false, reveal: false };
+  list.push(account);
   localStorage.setItem(KEY + "-ids", JSON.stringify(list));
   const note = document.getElementById("welcome-note");
-  if (note) note.textContent = "Your ID was saved on your account. It is not shown on the main page. For now the passphrase is that user ID.";
+  try {
+    await enqueue(() => publishAccount(account));
+    if (note) note.textContent = "Your ID was saved. It is not shown on the main page. For now the passphrase is that user ID. The same ID works on every device.";
+  } catch {
+    if (note) note.textContent = "This ID works on this browser, but it could not be saved for other devices. Try again when the connection is back.";
+  }
   enterAs(id, "profile");
 }
 document.getElementById("guest")?.addEventListener("click", () => enterAs("guest"));
@@ -918,9 +1073,10 @@ document.getElementById("login-form")?.addEventListener("submit", async (event) 
   const id = document.getElementById("login-id").value.trim();
   const pass = document.getElementById("login-pass").value;
   if (id.toLowerCase() === "darkstone007" && pass === "atlas-owner") { openOwner(); return; }
+  try { await enqueue(() => pullAccounts()); } catch { /* try the ids stored on this browser */ }
   const found = knownIds().find((item) => item.id === id.toUpperCase() || item.id === id);
   const attempts = [await sha(pass), await sha(pass.toUpperCase())];
-  if (!found || (found.pass && !attempts.includes(found.pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match a record made here."; return; }
+  if (!found || (found.pass && !attempts.includes(found.pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match an account."; return; }
   enterAs(found.id);
 });
 document.getElementById("who")?.addEventListener("click", () => {
@@ -941,7 +1097,11 @@ document.getElementById("owner-edit")?.addEventListener("submit", (event) => {
   localStorage.setItem("meaning-atlas-site-v3", JSON.stringify(next));
   const lede = document.querySelector("#welcome .lede");
   if (lede && next.welcome) lede.textContent = next.welcome;
-  document.getElementById("owner-note").textContent = "The site text is saved on this browser.";
+  enqueue(() => publishBoard()).then(() => {
+    document.getElementById("owner-note").textContent = "The site text is saved for every device.";
+  }).catch(() => {
+    document.getElementById("owner-note").textContent = "The site text is saved on this browser only.";
+  });
 });
 document.getElementById("owner-leave")?.addEventListener("click", () => {
   sessionStorage.removeItem("atlas-owner");
@@ -981,4 +1141,7 @@ const opening = document.querySelector("#welcome .lede");
 if (opening) opening.textContent = siteCopy().welcome;
 who();
 show("web");
+syncShared().catch(() => {});
+setInterval(() => { syncShared().catch(() => {}); }, 12000);
+window.addEventListener("focus", () => { syncShared().catch(() => {}); });
 window.addEventListener("resize", () => { if (view === "web") renderWeb(); });
