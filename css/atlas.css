@@ -100,13 +100,17 @@ textarea { min-height: 96px; resize: vertical; }
   color: var(--quiet);
 }
 .nav button.active { background: var(--lilac); color: #1a1220; }
-.pill {
+button.pill {
+  cursor: pointer;
+  font: inherit;
+  background: transparent;
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 8px 12px;
   color: var(--lilac);
   font-size: 13px;
 }
+.account-id { font-size: 28px; letter-spacing: 0.04em; margin: 8px 0 14px; }
 .workspace { padding: 8px 4vw 48px; max-width: 1180px; margin: 0 auto; }
 .tools {
   display: flex;

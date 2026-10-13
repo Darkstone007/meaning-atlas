@@ -98,7 +98,7 @@ function groups() {
 }
 function show(name) {
   view = name;
-  ["home", "web", "shelves", "add", "account"].forEach((item) => {
+  ["home", "web", "shelves", "add", "account", "profile"].forEach((item) => {
     const node = document.getElementById("view-" + item);
     if (node) node.hidden = item !== name;
   });
@@ -106,6 +106,7 @@ function show(name) {
   if (name === "web") renderWeb();
   if (name === "shelves") renderShelves();
   if (name === "account") renderAccount();
+  if (name === "profile") renderProfile();
 }
 function projectHtml() {
   const text = siteCopy();
@@ -530,20 +531,88 @@ document.querySelector("[name=meaning]").addEventListener("input", (event) => {
     host.append(button);
   });
 });
-function enterAs(id) {
-  state.session = { id, reveal: false };
+function enterAs(id, next) {
+  const known = knownIds().find((item) => item.id === id) || {};
+  state.session = { id, reveal: Boolean(known.reveal), name: known.name || "", contact: Boolean(known.contact), contactHow: known.contactHow || "", similar: Boolean(known.similar), passIsId: known.passIsId === true };
   sessionStorage.setItem("atlas-open", "1");
   save();
   who();
-  show("web");
+  show(next || "web");
 }
 function knownIds() {
   const raw = JSON.parse(localStorage.getItem(KEY + "-ids") || "[]");
   return raw.map((item) => (typeof item === "string" ? { id: item, pass: "" } : item));
 }
+function saveProfile(fields) {
+  const list = knownIds();
+  const item = list.find((entry) => entry.id === state.session.id);
+  if (!item) return;
+  Object.assign(item, fields);
+  localStorage.setItem(KEY + "-ids", JSON.stringify(list));
+  Object.assign(state.session, fields);
+  save();
+}
+function renderProfile() {
+  const host = document.getElementById("profile");
+  if (!host) return;
+  host.replaceChildren();
+  if (!state.session || state.session.id === "guest") {
+    host.innerHTML = `<p>You are a guest, so there is no ID yet. Log out and choose Make an ID. The site gives you one ID, and that ID is the passphrase.</p>`;
+    return;
+  }
+  const known = knownIds().find((item) => item.id === state.session.id) || {};
+  const passIsId = known.passIsId === true;
+  host.innerHTML = `<p class="legend">${passIsId ? "Your passphrase is this ID. Write it down. It is not shown on the map, and it stays here when you need it." : "This is your ID. Your passphrase is the one you set. The ID is not shown on the map."}</p>
+    <p class="account-id" id="shown-id"></p>
+    <button class="btn" id="copy-id" type="button">Copy the ID</button>
+    <form id="pass-form" class="stack">
+      <label>New passphrase<input name="pass" type="password" autocomplete="new-password" minlength="8"></label>
+      <label>Repeat the passphrase<input name="again" type="password" autocomplete="new-password"></label>
+      <button class="btn" type="submit">Update passphrase</button>
+    </form>
+    <form id="profile-form" class="stack">
+      <label>Name<input name="name" maxlength="80" placeholder="Only on this account"></label>
+      <label class="legend"><input name="contact" type="checkbox"> I want to be contacted</label>
+      <label>How to reach you<input name="contactHow" maxlength="160" placeholder="Only if you want to be contacted"></label>
+      <label class="legend"><input name="reveal" type="checkbox"> Show my ID beside my words</label>
+      <label class="legend"><input name="similar" type="checkbox"> Tell me when a word has a similar meaning or intention</label>
+      <button class="btn primary" type="submit">Save account</button>
+    </form>
+    <p class="note" id="profile-note"></p>`;
+  host.querySelector("#shown-id").textContent = state.session.id;
+  const profile = host.querySelector("#profile-form");
+  profile.name.value = state.session.name || "";
+  profile.contact.checked = Boolean(state.session.contact);
+  profile.contactHow.value = state.session.contactHow || "";
+  profile.reveal.checked = Boolean(state.session.reveal);
+  profile.similar.checked = Boolean(state.session.similar);
+  host.querySelector("#copy-id").onclick = async () => {
+    try { await navigator.clipboard.writeText(state.session.id); document.getElementById("profile-note").textContent = "Copied."; }
+    catch { document.getElementById("profile-note").textContent = state.session.id; }
+  };
+  host.querySelector("#pass-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const pass = String(data.get("pass") || "");
+    if (pass.length < 8 || pass !== data.get("again")) { document.getElementById("profile-note").textContent = "Use at least 8 characters, and type the passphrase the same way twice."; return; }
+    saveProfile({ pass: await sha(pass), passIsId: false });
+    event.currentTarget.reset();
+    document.getElementById("profile-note").textContent = "Passphrase updated. Your ID is unchanged.";
+    renderProfile();
+  };
+  profile.onsubmit = (event) => {
+    event.preventDefault();
+    const data = new FormData(profile);
+    const reveal = Boolean(data.get("reveal"));
+    state.records.forEach((record) => { if (record.userId === state.session.id) record.reveal = reveal; });
+    saveProfile({ name: String(data.get("name") || "").trim(), contact: Boolean(data.get("contact")), contactHow: String(data.get("contactHow") || "").trim(), reveal, similar: Boolean(data.get("similar")) });
+    document.getElementById("profile-note").textContent = "Account saved on this browser.";
+  };
+}
 function renderAccount() {
   const host = document.getElementById("mine");
   if (!host) return;
+  document.getElementById("similar")?.replaceChildren();
   host.replaceChildren();
   const reveal = document.createElement("label");
   reveal.className = "legend";
@@ -551,7 +620,8 @@ function renderAccount() {
   reveal.querySelector("input").onchange = (event) => {
     state.session.reveal = event.target.checked;
     state.records.forEach((record) => { if (record.userId === state.session.id) record.reveal = event.target.checked; });
-    save();
+    if (state.session.id !== "guest") saveProfile({ reveal: event.target.checked });
+    else save();
   };
   host.append(reveal);
   const mine = state.records.filter((record) => record.userId === state.session?.id).sort((a, b) => a.expression.localeCompare(b.expression, "en"));
@@ -578,6 +648,33 @@ function renderAccount() {
     row.append(button);
     host.append(row);
   });
+  const similar = document.getElementById("similar");
+  if (!similar) return;
+  similar.replaceChildren();
+  if (!state.session?.similar || state.session.id === "guest") return;
+  const heading = document.createElement("h3");
+  heading.textContent = "Words similar to yours";
+  similar.append(heading);
+  let found = false;
+  mine.forEach((record) => {
+    const labels = new Set([...(record.tags?.emotion || []), ...(record.tags?.intention || [])]);
+    state.records.forEach((other) => {
+      if (other.userId === record.userId && norm(other.expression) === norm(record.expression)) return;
+      const shared = [...new Set([...(other.tags?.emotion || []), ...(other.tags?.intention || [])])].filter((tag) => labels.has(tag));
+      if (!shared.length) return;
+      found = true;
+      const block = document.createElement("article");
+      block.className = "bit";
+      const use = other.example || other.intention || other.meaning || "";
+      block.innerHTML = `<h4>Words similar to ${esc(record.expression)}</h4><p>${esc(other.expression)} · ${esc(other.language)}</p><p>Shared: ${shared.map(esc).join(", ")}</p>${use ? `<p>How it might be used: ${esc(use)}</p>` : ""}`;
+      similar.append(block);
+    });
+  });
+  if (!found) {
+    const empty = document.createElement("p");
+    empty.textContent = "Nothing else shares a meaning or intention label with your words yet.";
+    similar.append(empty);
+  }
 }
 function freshId() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -637,23 +734,25 @@ function openOwner() {
 }
 document.getElementById("guest")?.addEventListener("click", () => enterAs("guest"));
 document.getElementById("make")?.addEventListener("click", async () => {
-  const pass = document.getElementById("login-pass").value;
-  if (pass.length < 8) { document.getElementById("welcome-note").textContent = "Use a passphrase of at least 8 characters, then make an ID."; return; }
   const id = freshId();
   const list = knownIds();
-  list.push({ id, pass: await sha(pass) });
+  list.push({ id, pass: await sha(id), passIsId: true, name: "", contact: false, contactHow: "", similar: false, reveal: false });
   localStorage.setItem(KEY + "-ids", JSON.stringify(list));
-  document.getElementById("welcome-note").textContent = "Write this down. Your ID is " + id + ".";
-  enterAs(id);
+  document.getElementById("welcome-note").textContent = "Your ID is also your passphrase. Write this down: " + id;
+  enterAs(id, "profile");
 });
 document.getElementById("login-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = document.getElementById("login-id").value.trim();
   const pass = document.getElementById("login-pass").value;
   if (id.toLowerCase() === "darkstone007" && pass === "atlas-owner") { openOwner(); return; }
-  const found = knownIds().find((item) => item.id === id.toUpperCase());
-  if (!found || (found.pass && found.pass !== await sha(pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match a record made here."; return; }
+  const found = knownIds().find((item) => item.id === id.toUpperCase() || item.id === id);
+  const attempts = [await sha(pass), await sha(pass.toUpperCase())];
+  if (!found || (found.pass && !attempts.includes(found.pass))) { document.getElementById("welcome-note").textContent = "That ID and passphrase do not match a record made here."; return; }
   enterAs(found.id);
+});
+document.getElementById("who")?.addEventListener("click", () => {
+  if (sessionStorage.getItem("atlas-open") === "1") show("profile");
 });
 document.getElementById("logout")?.addEventListener("click", () => {
   sessionStorage.removeItem("atlas-open");

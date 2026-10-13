@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,620&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/atlas.css?v=20261013g">
+  <link rel="stylesheet" href="css/atlas.css?v=20261013h">
 </head>
 <body>
   <section id="welcome" class="gate">
@@ -34,7 +34,7 @@
         <button type="button" data-view="add" id="nav-add">Add a word</button>
         <button type="button" data-view="account" id="nav-account">Your words</button>
       </nav>
-      <div class="who"><span class="pill" id="who">Come in</span></div>
+      <div class="who"><button type="button" class="pill" id="who">Come in</button></div>
     </header>
     <main class="workspace">
       <section id="view-home"></section>
@@ -73,7 +73,13 @@
         <h2>Your words</h2>
         <p class="lede">The words you posted. Edit one, or log out and return to the login page.</p>
         <button class="btn" id="logout" type="button">Log out</button>
+        <div id="similar"></div>
         <div id="mine"></div>
+      </section>
+      <section id="view-profile" hidden>
+        <h2>Your account</h2>
+        <p class="lede">This page is only for you. It is separate from Your words, and none of it is placed on the map.</p>
+        <div id="profile"></div>
       </section>
       <section id="view-add" hidden>
         <form id="add" class="form">
@@ -155,7 +161,7 @@
       <p class="note" id="owner-note"></p>
     </div>
   </section>
-  <script src="js/data.js?v=20261013g"></script>
-  <script src="js/site.js?v=20261013g"></script>
+  <script src="js/data.js?v=20261013h"></script>
+  <script src="js/site.js?v=20261013h"></script>
 </body>
 </html>
