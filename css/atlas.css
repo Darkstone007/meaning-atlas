@@ -304,7 +304,7 @@ input[type="range"] { accent-color: #7a5a9a; }
 .spine { color: #fff; font-size: 22px; }
 .spread, .spread h2, .spread h3, .spread p, .spread .bit, .spread .bit p, .spread .bit h4, .spread .account h3 { color: #1c1424; }
 .spread .bit { background: #fff; border: 1px solid #d8cce0; }
-.spread .badge { color: #3a2a4a; background: #efe6f4; }
+.spread .back-top { color: #1c1424; background: #fff; border: 1px solid #1c1424; }
 .word-group { color: #1c1424; font-size: 20px; }
 #view-profile .account-copy, #view-profile label, #view-profile h3 { color: #f4eef8; font-size: 18px; line-height: 1.55; }
 .owner-filters { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0 18px; }

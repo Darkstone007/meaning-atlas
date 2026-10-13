@@ -130,7 +130,7 @@ function groups() {
   const q = norm(document.getElementById("search")?.value || "");
   const terms = q.split(" ").filter(Boolean);
   const map = new Map();
-  state.records.filter((record) => terms.every((term) => norm([record.expression, record.language, record.meaning, record.also, ...(record.tags?.emotion || [])].join(" ")).includes(term))).forEach((record) => {
+  state.records.filter((record) => terms.every((term) => norm([record.expression, record.language, record.meaning, record.also, record.showName ? record.publicName : "", ...(record.tags?.emotion || [])].join(" ")).includes(term))).forEach((record) => {
     const key = norm(record.expression) + "|" + norm(record.language);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(record);
@@ -209,7 +209,7 @@ function who() {
   if (app) app.hidden = !inside;
   if (ownerPage) ownerPage.hidden = !owner;
   const whoNode = document.getElementById("who");
-  if (whoNode) whoNode.textContent = state.session?.id === "guest" ? "Guest" : "ID hidden";
+  if (whoNode) whoNode.textContent = state.session?.id === "guest" ? "Guest" : (state.session?.name || "ID hidden");
 }
 // Push word labels apart so a long word does not sit on top of another.
 // The gap depends on how wide the label is, then the labels are kept inside the map.
@@ -388,7 +388,9 @@ function renderPanel(nodes) {
 }
 // "Account 1" unless that person allowed their ID to be shown.
 function accountName(record, number) {
-  return record.reveal && record.userId ? `Account ${number} · User ID ${record.userId}` : `Account ${number}`;
+  // The name is chosen on this word only. Other words from the same person stay unnamed.
+  if (record.showName && record.publicName) return `Account ${number} · ${record.publicName}`;
+  return `Account ${number}`;
 }
 // Pull the video id out of a YouTube link so it can play on the account.
 function youtubeId(url) {
@@ -462,7 +464,7 @@ function renderShelves() {
     if (group.length === 1) {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = group[0].expression + (group[0].source === "example" ? " · example" : "");
+      button.textContent = group[0].expression + (group[0].showName && group[0].publicName ? " · " + group[0].publicName : "") + (group[0].source === "example" ? " · example" : "");
       if (reading === group[0].id) button.className = "on";
       button.onclick = () => { reading = reading === group[0].id ? null : group[0].id; renderShelves(); };
       nav.append(button);
@@ -475,7 +477,7 @@ function renderShelves() {
     group.forEach((record, index) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = `Account ${index + 1}`;
+      button.textContent = `Account ${index + 1}` + (record.showName && record.publicName ? " · " + record.publicName : "");
       if (reading === record.id) button.className = "on";
       button.onclick = () => { reading = reading === record.id ? null : record.id; renderShelves(); };
       nav.append(button);
@@ -483,6 +485,9 @@ function renderShelves() {
   });
   const page = words.find((record) => record.id === reading);
   if (page) spread.querySelector("#book-page").innerHTML = meaningHtml(page);
+  spread.querySelectorAll("[data-top]").forEach((button) => {
+    button.onclick = () => { reading = null; openBook = null; renderShelves(); };
+  });
 }
 // Labels people added themselves, kept in this browser.
 function extraLabels() {
@@ -589,7 +594,9 @@ document.getElementById("add").onsubmit = async (event) => {
   }
   const file = async (input) => input.files[0] ? await new Promise((resolve) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(input.files[0]); }) : "";
   const record = {
-    id: crypto.randomUUID(), userId: state.session.id, reveal: Boolean(state.session.reveal),
+    id: crypto.randomUUID(), userId: state.session.id, reveal: false,
+    showName: Boolean(form.showName?.checked),
+    publicName: form.showName?.checked ? (state.session.name || "") : "",
     expression: form.expression.value.trim(), language: form.language.value.split(";")[0].trim(),
     also: form.also.value.trim(),
     languagePractice: form.languagePractice.value.trim(),
@@ -631,20 +638,6 @@ document.getElementById("add").onsubmit = async (event) => {
   selected = norm(record.expression) + "|" + norm(record.language);
   show("web");
 };
-document.querySelector("[name=meaning]").addEventListener("input", (event) => {
-  const hay = norm(event.target.value);
-  const host = document.getElementById("noticed");
-  host.replaceChildren();
-  HINTS.filter((hint) => hint[2].some((word) => hay.includes(word))).forEach((hint) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "btn";
-    button.textContent = `Accept ${hint[1]} as ${hint[0]}`;
-    button.title = `Suggested because you wrote something like “${hint[2][0]}”. Nothing is added until you accept it.`;
-    button.onclick = () => { const box = document.querySelector(`[name="tag-${hint[0]}"][value="${hint[1]}"]`); if (box) box.checked = true; };
-    host.append(button);
-  });
-});
 // Come in as a guest or with an ID, then open the map or the account page.
 function enterAs(id, next) {
   const known = knownIds().find((item) => item.id === id) || {};
@@ -701,7 +694,6 @@ function renderProfile() {
       <label>Name <span class="opt">Optional</span><input name="name" maxlength="80" placeholder="Only on this account"></label>
       <label class="account-copy"><input name="contact" type="checkbox"> I want to be contacted. <span class="opt">Optional</span></label>
       <label>How to reach you <span class="opt">Optional</span><input name="contactHow" maxlength="160" placeholder="Only if you want to be contacted"></label>
-      <label class="account-copy"><input name="reveal" type="checkbox"> Show my ID beside my words. <span class="opt">Optional</span></label>
       <label class="account-copy"><input name="similar" type="checkbox"> Tell me when a word has a similar meaning or intention. <span class="opt">Optional</span></label>
       <button class="btn primary" type="submit">Save account</button>
     </form>
@@ -711,7 +703,6 @@ function renderProfile() {
   profile.name.value = state.session.name || "";
   profile.contact.checked = Boolean(state.session.contact);
   profile.contactHow.value = state.session.contactHow || "";
-  profile.reveal.checked = Boolean(state.session.reveal);
   profile.similar.checked = Boolean(state.session.similar);
   host.querySelector("#copy-id").onclick = async () => {
     try { await navigator.clipboard.writeText(state.session.id); document.getElementById("profile-note").textContent = "Copied."; }
@@ -730,9 +721,7 @@ function renderProfile() {
   profile.onsubmit = (event) => {
     event.preventDefault();
     const data = new FormData(profile);
-    const reveal = Boolean(data.get("reveal"));
-    state.records.forEach((record) => { if (record.userId === state.session.id) record.reveal = reveal; });
-    saveProfile({ name: String(data.get("name") || "").trim(), contact: Boolean(data.get("contact")), contactHow: String(data.get("contactHow") || "").trim(), reveal, similar: Boolean(data.get("similar")) });
+    saveProfile({ name: String(data.get("name") || "").trim(), contact: Boolean(data.get("contact")), contactHow: String(data.get("contactHow") || "").trim(), similar: Boolean(data.get("similar")) });
     show("web");
   };
 }
@@ -743,16 +732,6 @@ function renderAccount() {
   if (!host) return;
   document.getElementById("similar")?.replaceChildren();
   host.replaceChildren();
-  const reveal = document.createElement("label");
-  reveal.className = "legend";
-  reveal.innerHTML = `<input type="checkbox" ${state.session?.reveal ? "checked" : ""}> Show my ID beside my words`;
-  reveal.querySelector("input").onchange = (event) => {
-    state.session.reveal = event.target.checked;
-    state.records.forEach((record) => { if (record.userId === state.session.id) record.reveal = event.target.checked; });
-    if (state.session.id !== "guest") saveProfile({ reveal: event.target.checked });
-    else save();
-  };
-  host.append(reveal);
   const mine = state.records.filter((record) => record.userId === state.session?.id).sort((a, b) => a.expression.localeCompare(b.expression, "en"));
   if (!mine.length) { const empty = document.createElement("p"); empty.textContent = "You have not posted a word yet."; host.append(empty); return; }
   mine.forEach((record) => {
@@ -772,6 +751,11 @@ function renderAccount() {
       if (form.emotion) form.emotion.value = record.feeling || "";
       if (form.context) form.context.value = record.context || "";
       if (form.intention) form.intention.value = record.intention || "";
+      if (form.showName) form.showName.checked = Boolean(record.showName);
+      ["emotion", "context", "intention"].forEach((layer) => {
+        const chosen = new Set(record.tags?.[layer] || []);
+        form.querySelectorAll(`[name="tag-${layer}"]`).forEach((input) => { input.checked = chosen.has(input.value); });
+      });
       show("add");
     };
     row.append(button);
