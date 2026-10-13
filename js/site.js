@@ -14,35 +14,7 @@ Words and accounts are kept in this browser. There is no server behind the page.
 
 // The browser key for the words and the current session.
 const KEY = "meaning-atlas-pages-v2";
-// The shared copy. The first store filled its 100-request limit, so a save was refused.
-// These are spare stores. A full one is skipped and the words already on this browser are sent to the next.
-const CLOUDS = [
-  "https://crudcrud.com/api/b6cddba4606b4ffdae6ce03dfd183838",
-  "https://crudcrud.com/api/5ff18a1f8d204e5cafe196d07331ef35",
-  "https://crudcrud.com/api/9cbef58dd7e543f1b4fb82dacb626fdf",
-  "https://crudcrud.com/api/a48131b5a63542bdb0392aa622a6d5cd",
-  "https://crudcrud.com/api/de955aed42144506992a78de660a651f",
-  "https://crudcrud.com/api/f674458be58e499bb93d2f50a955d89d",
-  "https://crudcrud.com/api/d7cec8eda1534f55831583a216cadc82",
-  "https://crudcrud.com/api/7ba4f6eb755f4be994b388b10549aa40",
-  "https://crudcrud.com/api/0f46025a1d3f472c897c5e55712bf6e4",
-  "https://crudcrud.com/api/11079ae18ca446e4a20b6f6da3537d1d",
-  "https://crudcrud.com/api/da548f97be1e46fc805bb6edbfcfee10",
-  "https://crudcrud.com/api/0ca625ee595740ef871a99ac90856c57",
-  "https://crudcrud.com/api/3dd6db3472eb462fbe2d7d7b9e163e2f",
-  "https://crudcrud.com/api/7c6a8038dff342b0be1f0d526d6505d8",
-  "https://crudcrud.com/api/05def5441df34a1d86d587b762cd1285",
-  "https://crudcrud.com/api/0d9db66d854f4e5faf130b70b55835dc",
-  "https://crudcrud.com/api/8c0b3360e1964ce0a7684bcdaa5228dd",
-  "https://crudcrud.com/api/9222a8c07a3c4e7196faeebf26a2e12a",
-  "https://crudcrud.com/api/59444fffc18248208022ed6522375ea1",
-  "https://crudcrud.com/api/edd3dc566f064bb8bf762c7d98d0274b",
-  "https://crudcrud.com/api/251061e1cf6b4d398b62d680f4dc5e5a",
-  "https://crudcrud.com/api/bbcdcce76315432c82649c0b1b52bdba",
-  "https://crudcrud.com/api/958e3caa194648ef993cde7f50af4298",
-  "https://crudcrud.com/api/64bbf12f22484a6ea7b9a228dca89f67",
-];
-const CLOUD_SLOT = "meaning-atlas-cloud-slot";
+// Words and accounts are shared from the browser, not kept only on this computer.
 // Extra survey answers for the three cleared accounts. Merged in when the page has no saved records yet.
 const MORE = {
   "acct-4f2a": {
@@ -137,107 +109,95 @@ function load() {
 }
 // Write the words and the session back to this browser. The shared copy is published separately.
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+let seenRev = "";
+const KV = "https://keyvalue.immanuel.co/api/KeyVal";
+const KV_APP = "gcz9agth";
+function encodeShare(value) {
+  return btoa(unescape(encodeURIComponent(value))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+function decodeShare(value) {
+  const pad = value.length % 4 === 0 ? "" : "=".repeat(4 - (value.length % 4));
+  return decodeURIComponent(escape(atob(value.replace(/-/g, "+").replace(/_/g, "/") + pad)));
+}
+async function kvGet(key) {
+  const response = await fetch(KV + "/GetValue/" + KV_APP + "/" + key);
+  if (!response.ok) throw new Error("The shared copy did not answer (" + response.status + ").");
+  const data = await response.json();
+  return data == null ? "" : String(data);
+}
+async function kvSet(key, value) {
+  const response = await fetch(KV + "/UpdateValue/" + KV_APP + "/" + key + "/" + value, { method: "POST" });
+  if (!response.ok) throw new Error("The shared copy did not save (" + response.status + ").");
+}
+async function writeBlob(name, value) {
+  const encoded = encodeShare(JSON.stringify(value));
+  const parts = [];
+  for (let index = 0; index < encoded.length; index += 180) parts.push(encoded.slice(index, index + 180));
+  for (let index = 0; index < parts.length; index++) await kvSet(name + "-" + index, parts[index]);
+  await kvSet(name + "-n", String(parts.length));
+}
+async function readBlob(name) {
+  const count = Number(await kvGet(name + "-n")) || 0;
+  if (!count) return null;
+  let encoded = "";
+  for (let index = 0; index < count; index++) encoded += await kvGet(name + "-" + index);
+  if (!encoded) return null;
+  return JSON.parse(decodeShare(encoded));
+}
+function sharedWord(record) {
+  const body = { ...record, updatedAt: record.updatedAt || Date.now() };
+  delete body._crud;
+  delete body.image;
+  delete body.audio;
+  delete body.video;
+  return body;
+}
+async function touchRev() {
+  seenRev = String(Date.now());
+  await kvSet("rev", seenRev);
+}
 let cloudChain = Promise.resolve();
 function enqueue(job) {
   const run = cloudChain.then(job, job);
   cloudChain = run.then(() => {}, () => {});
   return run;
 }
-function cloudRoot() {
-  const slot = Math.max(0, Math.min(CLOUDS.length - 1, Number(localStorage.getItem(CLOUD_SLOT) || "0") || 0));
-  return CLOUDS[slot];
-}
-function isCap(error) {
-  return /exceeded allowed number of requests/i.test(String(error && error.message || error));
-}
-function advanceCloud() {
-  const slot = Number(localStorage.getItem(CLOUD_SLOT) || "0") || 0;
-  if (slot + 1 >= CLOUDS.length) return false;
-  localStorage.setItem(CLOUD_SLOT, String(slot + 1));
-  state.records.forEach((record) => { delete record._crud; });
-  const accounts = knownIds().map((account) => { const copy = { ...account }; delete copy._crud; return copy; });
-  localStorage.setItem(KEY + "-ids", JSON.stringify(accounts));
-  return true;
-}
-async function cloudFetch(path, options) {
-  const response = await fetch(cloudRoot() + path, options);
-  const text = await response.text();
-  if (!response.ok) throw new Error(text.slice(0, 220) || ("cloud " + response.status));
-  if (!text) return null;
-  try { return JSON.parse(text); } catch { return null; }
-}
-function wordBody(record) {
-  const body = { ...record, updatedAt: record.updatedAt || Date.now() };
-  delete body._crud;
-  ["image", "audio", "video"].forEach((key) => { if (body[key] && String(body[key]).length > 80000) body[key] = ""; });
-  return body;
-}
 async function publishWord(record) {
   record.updatedAt = Date.now();
-  let body = wordBody(record);
-  let stripped = false;
-  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
-    try {
-      if (record._crud) {
-        const response = await fetch(cloudRoot() + "/words/" + record._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        if (response.ok) return;
-        const text = await response.text();
-        if (response.status !== 404) throw new Error(text.slice(0, 220));
-        delete record._crud;
-      }
-      const created = await cloudFetch("/words", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!created || !created._id) throw new Error("The shared copy did not keep the word.");
-      record._crud = created._id;
-      return;
-    } catch (error) {
-      if (!stripped && /too large|entity|payload/i.test(String(error.message || error))) {
-        stripped = true;
-        body = { ...body, image: "", audio: "", video: "" };
-        continue;
-      }
-      if (isCap(error) && advanceCloud()) { delete record._crud; continue; }
-      throw error;
-    }
+  await writeBlob("w-" + record.id, sharedWord(record));
+  const ids = (await readBlob("word-ids")) || [];
+  if (!ids.includes(record.id)) {
+    ids.push(record.id);
+    await writeBlob("word-ids", ids);
   }
-  throw new Error("The shared copy is full. Try again in a moment.");
+  await touchRev();
 }
 async function publishAccount(account) {
   const body = { ...account };
   delete body._crud;
-  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
-    try {
-      if (account._crud) {
-        const response = await fetch(cloudRoot() + "/accounts/" + account._crud, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-        if (response.ok) return;
-        const text = await response.text();
-        if (response.status !== 404) throw new Error(text.slice(0, 220));
-        delete account._crud;
-      }
-      const created = await cloudFetch("/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!created || !created._id) throw new Error("The shared copy did not keep the account.");
-      account._crud = created._id;
-      const list = knownIds().map((item) => item.id === account.id ? account : item);
-      if (!list.some((item) => item.id === account.id)) list.push(account);
-      localStorage.setItem(KEY + "-ids", JSON.stringify(list));
-      return;
-    } catch (error) {
-      if (isCap(error) && advanceCloud()) { delete account._crud; continue; }
-      throw error;
-    }
+  await writeBlob("a-" + account.id, body);
+  const ids = (await readBlob("account-ids")) || [];
+  if (!ids.includes(account.id)) {
+    ids.push(account.id);
+    await writeBlob("account-ids", ids);
   }
+  const list = knownIds().map((item) => item.id === account.id ? { ...item, ...body } : item);
+  if (!list.some((item) => item.id === account.id)) list.push(body);
+  localStorage.setItem(KEY + "-ids", JSON.stringify(list));
+  await touchRev();
 }
 async function pullAccounts() {
-  const remote = await cloudFetch("/accounts");
+  const ids = (await readBlob("account-ids")) || [];
   const map = new Map(knownIds().map((item) => [item.id, item]));
-  (remote || []).forEach((item) => {
-    const crud = item._id;
-    delete item._id;
-    const local = map.get(item.id) || {};
-    map.set(item.id, { ...local, ...item, _crud: crud, pass: item.pass || local.pass || "" });
-  });
+  for (const id of ids) {
+    const remote = await readBlob("a-" + id);
+    if (!remote) continue;
+    const local = map.get(id) || {};
+    map.set(id, { ...local, ...remote, pass: remote.pass || local.pass || "" });
+  }
   localStorage.setItem(KEY + "-ids", JSON.stringify([...map.values()]));
   for (const account of map.values()) {
-    if (!account._crud && account.id && account.pass) await publishAccount(account);
+    if (account.id && account.pass && !ids.includes(account.id)) await publishAccount(account);
   }
 }
 async function publishBoard() {
@@ -245,22 +205,11 @@ async function publishBoard() {
   try { labels = JSON.parse(localStorage.getItem("meaning-atlas-labels") || "{}") || {}; } catch { labels = {}; }
   let site = {};
   try { site = JSON.parse(localStorage.getItem("meaning-atlas-site-v3") || "{}") || {}; } catch { site = {}; }
-  const body = { kind: "board", labels, site, updatedAt: Date.now() };
-  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
-    try {
-      const list = await cloudFetch("/board");
-      if (list && list[0]) await cloudFetch("/board/" + list[0]._id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      else await cloudFetch("/board", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      return;
-    } catch (error) {
-      if (isCap(error) && advanceCloud()) continue;
-      throw error;
-    }
-  }
+  await writeBlob("board", { labels, site, updatedAt: Date.now() });
+  await touchRev();
 }
 async function pullBoard() {
-  const list = await cloudFetch("/board");
-  const board = list && list[0];
+  const board = await readBlob("board");
   if (!board) return 0;
   if (board.labels) localStorage.setItem("meaning-atlas-labels", JSON.stringify(board.labels));
   if (board.site && (board.site.paragraphs || board.site.welcome)) localStorage.setItem("meaning-atlas-site-v3", JSON.stringify(board.site));
@@ -268,35 +217,26 @@ async function pullBoard() {
 }
 let lastStamp = "";
 async function refreshShared(full) {
-  const localById = new Map(state.records.map((record) => [record.id, record]));
-  let remote;
-  for (let attempt = 0; attempt < CLOUDS.length + 2; attempt++) {
-    try { remote = await cloudFetch("/words"); break; }
-    catch (error) { if (isCap(error) && advanceCloud()) continue; throw error; }
+  if (!full) {
+    const rev = await kvGet("rev");
+    if (rev && rev === seenRev) return;
+    seenRev = rev;
   }
-  const drop = [];
+  const localById = new Map(state.records.map((record) => [record.id, record]));
+  const ids = (await readBlob("word-ids")) || [];
   const byId = new Map();
-  (remote || []).forEach((item) => {
-    const crud = item._id;
-    delete item._id;
-    const record = { ...item, _crud: crud };
+  for (const id of ids) {
+    const record = await readBlob("w-" + id);
+    if (!record) continue;
     const previous = localById.get(record.id);
     if (previous) {
       if (!record.image && previous.image) record.image = previous.image;
       if (!record.audio && previous.audio) record.audio = previous.audio;
       if (!record.video && previous.video) record.video = previous.video;
     }
-    const key = record.id || crud;
-    const prev = byId.get(key);
-    if (!prev || (record.updatedAt || 0) >= (prev.updatedAt || 0)) {
-      if (prev) drop.push(prev);
-      byId.set(key, record);
-    } else drop.push(record);
-  });
-  for (const extra of drop) {
-    try { await fetch(cloudRoot() + "/words/" + extra._crud, { method: "DELETE" }); } catch { /* the next refresh tries again */ }
+    byId.set(record.id, record);
   }
-  const pending = state.records.filter((record) => record.id && ![...byId.values()].some((item) => item.id === record.id));
+  const pending = state.records.filter((record) => record.id && !byId.has(record.id));
   for (const record of pending) {
     await publishWord(record);
     byId.set(record.id, record);
@@ -316,6 +256,7 @@ async function refreshShared(full) {
     await pullAccounts();
     boardTime = await pullBoard();
   }
+  seenRev = await kvGet("rev");
   const stamp = boardTime + "|" + state.records.map((record) => record.id + ":" + (record.updatedAt || 0)).sort().join("|");
   if (stamp === lastStamp) return;
   lastStamp = stamp;
@@ -1231,6 +1172,6 @@ if (opening) opening.textContent = siteCopy().welcome;
 who();
 show("web");
 syncShared(true).catch(() => {});
-setInterval(() => { if (document.visibilityState === "visible") syncShared(false).catch(() => {}); }, 90000);
+setInterval(() => { if (document.visibilityState === "visible") syncShared(false).catch(() => {}); }, 120000);
 window.addEventListener("focus", () => { syncShared(false).catch(() => {}); });
 window.addEventListener("resize", () => { if (view === "web") renderWeb(); });
